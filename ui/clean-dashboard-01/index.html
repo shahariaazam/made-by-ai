@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+</head>
+<body class="bg-gray-100">
+<div class="flex h-screen">
+    <div id="sidebar" class="w-64 flex flex-col justify-between bg-gray-800 text-white transition-all duration-300 ease-in-out">
+        <div>
+            <button id="toggleSidebar" class="p-4 w-full flex justify-end">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+            <div class="px-4 py-2">
+                <p id="welcomeMessage" class="text-sm truncate">Welcome, John</p>
+            </div>
+            <nav class="mt-8">
+                <a href="#" class="flex items-center px-4 py-2 hover:bg-gray-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                    <span class="ml-2">Dashboard</span>
+                </a>
+                <a href="#" class="flex items-center px-4 py-2 hover:bg-gray-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    <span class="ml-2">Users</span>
+                </a>
+                <a href="#" class="flex items-center px-4 py-2 hover:bg-gray-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    <span class="ml-2">Settings</span>
+                </a>
+            </nav>
+        </div>
+        <button class="p-4 hover:bg-gray-700 flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            <span class="ml-2">Logout</span>
+        </button>
+    </div>
+
+    <div class="flex-1 p-10 overflow-y-auto">
+        <h1 class="text-2xl font-bold mb-6">Admin Dashboard</h1>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h2 class="text-xl font-semibold mb-2">Total Users</h2>
+                <p class="text-3xl font-bold">10,234</p>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h2 class="text-xl font-semibold mb-2">Revenue</h2>
+                <p class="text-3xl font-bold">$54,321</p>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h2 class="text-xl font-semibold mb-2">Active Projects</h2>
+                <p class="text-3xl font-bold">23</p>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-lg shadow mb-6">
+            <h2 class="text-xl font-semibold mb-4">User Growth</h2>
+            <canvas id="userGrowthChart"></canvas>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h2 class="text-xl font-semibold mb-4">News Feed</h2>
+                <ul class="space-y-4">
+                    <li class="border-b pb-2">
+                        <h3 class="font-semibold">New Feature Launch</h3>
+                        <p class="text-sm text-gray-600">We've launched a new analytics dashboard for all premium users.</p>
+                    </li>
+                    <li class="border-b pb-2">
+                        <h3 class="font-semibold">Maintenance Update</h3>
+                        <p class="text-sm text-gray-600">Scheduled maintenance will occur on July 15th from 2AM to 4AM UTC.</p>
+                    </li>
+                    <li>
+                        <h3 class="font-semibold">Team Milestone</h3>
+                        <p class="text-sm text-gray-600">We've reached 1 million active users! Thank you for your continued support.</p>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow">
+                <h2 class="text-xl font-semibold mb-4">New Members</h2>
+                <ul class="space-y-4">
+                    <li class="flex items-center">
+                        <div class="w-10 h-10 rounded-full bg-gray-300 mr-3"></div>
+                        <div>
+                            <h3 class="font-semibold">Jane Doe</h3>
+                            <p class="text-sm text-gray-600">Joined 2 days ago</p>
+                        </div>
+                    </li>
+                    <li class="flex items-center">
+                        <div class="w-10 h-10 rounded-full bg-gray-300 mr-3"></div>
+                        <div>
+                            <h3 class="font-semibold">John Smith</h3>
+                            <p class="text-sm text-gray-600">Joined 3 days ago</p>
+                        </div>
+                    </li>
+                    <li class="flex items-center">
+                        <div class="w-10 h-10 rounded-full bg-gray-300 mr-3"></div>
+                        <div>
+                            <h3 class="font-semibold">Emily Johnson</h3>
+                            <p class="text-sm text-gray-600">Joined 5 days ago</p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const sidebar = document.getElementById('sidebar');
+    const toggleButton = document.getElementById('toggleSidebar');
+    const welcomeMessage = document.getElementById('welcomeMessage');
+    let sidebarOpen = true;
+
+    function toggleSidebar() {
+        sidebarOpen = !sidebarOpen;
+        if (sidebarOpen) {
+            sidebar.classList.remove('w-20');
+            sidebar.classList.add('w-64');
+            toggleButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+            welcomeMessage.classList.remove('text-xs');
+            welcomeMessage.classList.add('text-sm');
+        } else {
+            sidebar.classList.remove('w-64');
+            sidebar.classList.add('w-20');
+            toggleButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>';
+            welcomeMessage.classList.remove('text-sm');
+            welcomeMessage.classList.add('text-xs');
+        }
+    }
+
+    toggleButton.addEventListener('click', toggleSidebar);
+
+    function updateSidebarItems() {
+        const sidebarItems = sidebar.querySelectorAll('a, button');
+        sidebarItems.forEach(item => {
+            const textSpan = item.querySelector('span');
+            if (textSpan) {
+                textSpan.style.display = sidebarOpen ? 'inline' : 'none';
+            }
+        });
+    }
+
+    toggleButton.addEventListener('click', updateSidebarItems);
+
+    const ctx = document.getElementById('userGrowthChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+            datasets: [{
+                label: 'User Growth',
+                data: [5000, 5500, 6000, 7000, 8000, 10000],
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+</script>
+</body>
+</html>
