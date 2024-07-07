@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmic Catcher: A Customizable Adventure</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="game-wrapper">
+    <div id="game-container">
+        <div id="player"></div>
+        <div id="score">Score: <span id="score-value">0</span></div>
+        <div id="missed">Missed: <span id="missed-value">0</span></div>
+        <div id="intro-screen">
+            <h2>Welcome to Cosmic Catcher!</h2>
+            <input type="text" id="player-name" placeholder="Enter your name">
+            <select id="theme-select">
+                <option value="cosmic">Cosmic Stars</option>
+                <option value="animals">Animals</option>
+                <option value="fruits">Fruits</option>
+            </select>
+            <button id="start-button">Start Game</button>
+        </div>
+    </div>
+    <div id="stats">
+        <h2>Cosmic Scorecard</h2>
+    </div>
+</div>
+<div id="rules">
+    <h2>How to Play</h2>
+    <ul>
+        <li>Move your mouse (or finger on touch devices) left and right to control the catcher at the bottom of the screen.</li>
+        <li>Catch falling objects to score points. Different objects are worth different points.</li>
+        <li>Avoid missing objects. The game tracks how many you've missed.</li>
+        <li>Special objects:
+            <ul>
+                <li>Slow object: Decreases game speed</li>
+                <li>Fast object: Increases game speed</li>
+            </ul>
+        </li>
+        <li>The game speed increases every 20 points you score.</li>
+        <li>Try to catch as many objects as you can and aim for a high score!</li>
+    </ul>
+</div>
+<script src="themes.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
