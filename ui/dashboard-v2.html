@@ -1,0 +1,241 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.1/chart.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100">
+<div class="flex h-screen">
+    <!-- Sidebar -->
+    <div id="sidebar" class="bg-gray-800 text-white transition-all duration-300 w-64">
+        <div class="p-4 flex justify-between items-center">
+            <h2 class="font-bold" id="dashboardTitle">Dashboard</h2>
+            <button id="toggleSidebar" class="text-white">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+        </div>
+        <nav class="mt-8">
+            <a href="#" class="block py-2 px-4 hover:bg-gray-700 flex items-center">
+                <i class="fas fa-home mr-2"></i>
+                <span class="ml-2">Home</span>
+            </a>
+            <a href="#" class="block py-2 px-4 hover:bg-gray-700 flex items-center">
+                <i class="fas fa-chart-bar mr-2"></i>
+                <span class="ml-2">Analytics</span>
+            </a>
+            <a href="#" class="block py-2 px-4 hover:bg-gray-700 flex items-center">
+                <i class="fas fa-chart-pie mr-2"></i>
+                <span class="ml-2">Reports</span>
+            </a>
+            <a href="#" class="block py-2 px-4 hover:bg-gray-700 flex items-center">
+                <i class="fas fa-cog mr-2"></i>
+                <span class="ml-2">Settings</span>
+            </a>
+        </nav>
+    </div>
+
+    <!-- Main content -->
+    <div class="flex-1 overflow-y-auto">
+        <header class="bg-white shadow">
+            <div class="mx-auto px-4 py-6 sm:px-6 lg:px-8">
+                <h1 class="text-3xl font-bold text-gray-900">Dashboard</h1>
+            </div>
+        </header>
+        <main class="mx-auto px-4 sm:px-6 lg:px-8">
+            <!-- Overview section -->
+            <div class="mt-8">
+                <h2 class="text-2xl font-semibold text-gray-900">Overview</h2>
+                <div class="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                    <div class="bg-white overflow-hidden shadow rounded-lg">
+                        <div class="p-5">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0 bg-indigo-500 rounded-md p-3">
+                                    <i class="fas fa-chart-bar text-white"></i>
+                                </div>
+                                <div class="ml-5 w-0 flex-1">
+                                    <dl>
+                                        <dt class="text-sm font-medium text-gray-500 truncate">Total Revenue</dt>
+                                        <dd class="text-lg font-medium text-gray-900">$54,763</dd>
+                                    </dl>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white overflow-hidden shadow rounded-lg">
+                        <div class="p-5">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0 bg-green-500 rounded-md p-3">
+                                    <i class="fas fa-users text-white"></i>
+                                </div>
+                                <div class="ml-5 w-0 flex-1">
+                                    <dl>
+                                        <dt class="text-sm font-medium text-gray-500 truncate">New Customers</dt>
+                                        <dd class="text-lg font-medium text-gray-900">2,846</dd>
+                                    </dl>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white overflow-hidden shadow rounded-lg">
+                        <div class="p-5">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0 bg-yellow-500 rounded-md p-3">
+                                    <i class="fas fa-shopping-cart text-white"></i>
+                                </div>
+                                <div class="ml-5 w-0 flex-1">
+                                    <dl>
+                                        <dt class="text-sm font-medium text-gray-500 truncate">Avg. Order Value</dt>
+                                        <dd class="text-lg font-medium text-gray-900">$89.43</dd>
+                                    </dl>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts section -->
+            <div class="mt-8">
+                <h2 class="text-2xl font-semibold text-gray-900">Charts</h2>
+                <div class="mt-4 grid grid-cols-1 gap-5 lg:grid-cols-2">
+                    <div class="bg-white overflow-hidden shadow rounded-lg">
+                        <div class="p-5">
+                            <h3 class="text-lg font-medium text-gray-900">Bar Chart</h3>
+                            <div class="mt-4" style="height: 300px;">
+                                <canvas id="barChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white overflow-hidden shadow rounded-lg">
+                        <div class="p-5">
+                            <h3 class="text-lg font-medium text-gray-900">Line Chart</h3>
+                            <div class="mt-4" style="height: 300px;">
+                                <canvas id="lineChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+
+<script>
+    // Sidebar toggle functionality
+    const sidebar = document.getElementById('sidebar');
+    const toggleSidebar = document.getElementById('toggleSidebar');
+    const dashboardTitle = document.getElementById('dashboardTitle');
+    let sidebarCollapsed = false;
+
+    toggleSidebar.addEventListener('click', () => {
+        sidebarCollapsed = !sidebarCollapsed;
+        if (sidebarCollapsed) {
+            sidebar.classList.remove('w-64');
+            sidebar.classList.add('w-16');
+            toggleSidebar.innerHTML = '<i class="fas fa-chevron-right"></i>';
+            dashboardTitle.style.display = 'none';
+            document.querySelectorAll('#sidebar span').forEach(span => span.style.display = 'none');
+        } else {
+            sidebar.classList.remove('w-16');
+            sidebar.classList.add('w-64');
+            toggleSidebar.innerHTML = '<i class="fas fa-chevron-left"></i>';
+            dashboardTitle.style.display = 'block';
+            document.querySelectorAll('#sidebar span').forEach(span => span.style.display = 'inline');
+        }
+    });
+
+    // Chart.js initialization
+    const barCtx = document.getElementById('barChart').getContext('2d');
+    const lineCtx = document.getElementById('lineChart').getContext('2d');
+
+    const data = {
+        labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+        datasets: [
+            {
+                label: 'Sales',
+                data: [12, 19, 3, 5, 2, 3],
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 1
+            },
+            {
+                label: 'Revenue',
+                data: [7, 11, 5, 8, 3, 7],
+                backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                borderColor: 'rgba(153, 102, 255, 1)',
+                borderWidth: 1
+            }
+        ]
+    };
+
+    new Chart(barCtx, {
+        type: 'bar',
+        data: data,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+
+    new Chart(lineCtx, {
+        type: 'line',
+        data: data,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+</script>
+</body>
+</html><script>
+(function() {
+  var ws = new WebSocket('ws://' + window.location.host + 
+             '/jb-server-page?reloadMode=RELOAD_ON_SAVE&'+
+             'referrer=' + encodeURIComponent(window.location.pathname));
+  ws.onmessage = function (msg) {
+      if (msg.data === 'reload') {
+          window.location.reload();
+      }
+      if (msg.data.startsWith('update-css ')) {
+          var messageId = msg.data.substring(11);
+          var links = document.getElementsByTagName('link');
+          for (var i = 0; i < links.length; i++) {
+              var link = links[i];
+              if (link.rel !== 'stylesheet') continue;
+              var clonedLink = link.cloneNode(true);
+              var newHref = link.href.replace(/(&|\?)jbUpdateLinksId=\d+/, "$1jbUpdateLinksId=" + messageId);
+              if (newHref !== link.href) {
+                clonedLink.href = newHref;
+              }
+              else {
+                var indexOfQuest = newHref.indexOf('?');
+                if (indexOfQuest >= 0) {
+                  // to support ?foo#hash 
+                  clonedLink.href = newHref.substring(0, indexOfQuest + 1) + 'jbUpdateLinksId=' + messageId + '&' + 
+                                    newHref.substring(indexOfQuest + 1);
+                }
+                else {
+                  clonedLink.href += '?' + 'jbUpdateLinksId=' + messageId;
+                }
+              }
+              link.replaceWith(clonedLink);
+          }
+      }
+  };
+})();
+</script>
