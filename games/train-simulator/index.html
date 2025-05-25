@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kid's Train Driver - 3D More Realism</title>
+    <title>Realistic Train Simulator 3D</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -65,6 +65,10 @@
         #slowDownBtn:hover { background-color: #e53935; }
         #hornBtn { background-color: #2196F3; }
         #hornBtn:hover { background-color: #1e88e5; }
+        #cabViewBtn { background-color: #FF9800; }
+        #cabViewBtn:hover { background-color: #FB8C00; }
+        #weatherBtn { background-color: #9C27B0; }
+        #weatherBtn:hover { background-color: #8E24AA; }
 
         #hud {
             position: absolute;
@@ -93,14 +97,64 @@
             pointer-events: none;
             z-index: 110;
         }
+        #advanced-controls {
+            position: absolute;
+            top: 120px;
+            left: 20px;
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            z-index: 100;
+            display: none;
+        }
+        .signal {
+            position: absolute;
+            width: 60px;
+            height: 150px;
+            background-color: rgba(0, 0, 0, 0.7);
+            border-radius: 5px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            align-items: center;
+            padding: 10px 0;
+            z-index: 90;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        .signal-light {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #333;
+        }
+        .red { background-color: #f44336; }
+        .yellow { background-color: #ffeb3b; }
+        .green { background-color: #4CAF50; }
     </style>
+    <!-- External Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/howler@2.2.3/dist/howler.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <!-- Game Modules -->
+    <script type="module" src="js/main.js"></script>
 </head>
 <body>
-<div class="header">Kid's Train Driver - 3D</div>
+<div class="header">Realistic Train Simulator 3D</div>
 <div id="gameContainer">
     <div id="hud">
-        Speed: <span id="speedDisplay">0</span> km/h
+        <div>Speed: <span id="speedDisplay">0</span> km/h</div>
+        <div>Time: <span id="timeDisplay">12:00</span></div>
+        <div>Weather: <span id="weatherDisplay">Clear</span></div>
+    </div>
+    <div id="advanced-controls">
+        <div>Throttle: <span id="throttleDisplay">0</span>%</div>
+        <div>Brake: <span id="brakeDisplay">0</span>%</div>
+        <div>Direction: <span id="directionDisplay">Forward</span></div>
     </div>
     <div id="hornMessage">HONK!</div>
 </div>
@@ -108,564 +162,8 @@
     <button id="speedUpBtn">Speed Up (Up Arrow)</button>
     <button id="slowDownBtn">Slow Down (Down Arrow)</button>
     <button id="hornBtn">Horn (Spacebar)</button>
+    <button id="cabViewBtn">Cab View (V)</button>
+    <button id="weatherBtn">Change Weather (W)</button>
 </div>
-
-<script>
-    // --- Three.js Scene Setup ---
-    let scene, camera, renderer;
-    let train, trainSpeed = 0;
-    const maxTrainSpeed = 0.8;
-    const trainAcceleration = 0.004;
-    const trainDeceleration = 0.0015;
-    const trainBrakingForce = 0.008;
-    let isAccelerating = false, isBraking = false;
-
-    let trackPath;
-    let trackPosition = 0;
-    const trackObjects = new THREE.Group();
-    const sceneryObjects = new THREE.Group();
-
-    const gameContainer = document.getElementById('gameContainer');
-    const speedDisplay = document.getElementById('speedDisplay');
-    const hornMessageElement = document.getElementById('hornMessage');
-    const wheelRotationSpeed = 0.1;
-
-    function initThreeJS() {
-        scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87CEEB);
-        scene.fog = new THREE.Fog(0x87CEEB, 150, 500);
-
-        // Camera
-        const aspect = gameContainer.clientWidth / gameContainer.clientHeight;
-        camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
-        camera.position.set(0, 30, -40);
-        camera.lookAt(0, 0, 0);
-
-        // Renderer
-        renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(gameContainer.clientWidth, gameContainer.clientHeight);
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        gameContainer.appendChild(renderer.domElement);
-
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-        scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
-        directionalLight.position.set(70, 120, 80);
-        directionalLight.castShadow = true;
-        directionalLight.shadow.mapSize.width = 2048;
-        directionalLight.shadow.mapSize.height = 2048;
-        directionalLight.shadow.camera.near = 0.5;
-        directionalLight.shadow.camera.far = 500;
-        directionalLight.shadow.camera.left = -150;
-        directionalLight.shadow.camera.right = 150;
-        directionalLight.shadow.camera.top = 150;
-        directionalLight.shadow.camera.bottom = -150;
-        scene.add(directionalLight);
-
-        // Ground Plane
-        const groundGeometry = new THREE.PlaneGeometry(1500, 1500);
-        groundGeometry.computeBoundingSphere();
-        groundGeometry.computeBoundingBox();
-        const groundMaterial = new THREE.MeshStandardMaterial({
-            color: 0x556B2F,
-            roughness: 0.95,
-            metalness: 0.05
-        });
-        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-        ground.rotation.x = -Math.PI / 2;
-        ground.receiveShadow = true;
-        scene.add(ground);
-
-        scene.add(sceneryObjects);
-
-        createTrain();
-        createTrackPath();
-        drawTrack();
-        createScenery();
-
-        animate();
-    }
-
-    function createTrain() {
-        train = new THREE.Group();
-
-        // Locomotive
-        const locoMat = new THREE.MeshStandardMaterial({ color: 0xA93226, roughness: 0.4, metalness: 0.3 });
-        const locoBodyGeo = new THREE.BoxGeometry(4, 3.5, 8);
-        locoBodyGeo.computeBoundingSphere();
-        locoBodyGeo.computeBoundingBox();
-        const locomotiveBody = new THREE.Mesh(locoBodyGeo, locoMat);
-        locomotiveBody.position.y = 1.75;
-        locomotiveBody.position.z = 1;
-        locomotiveBody.castShadow = true;
-        train.add(locomotiveBody);
-
-        const locoCabGeo = new THREE.BoxGeometry(3.8, 3, 3);
-        locoCabGeo.computeBoundingSphere();
-        locoCabGeo.computeBoundingBox();
-        const locoCab = new THREE.Mesh(locoCabGeo, locoMat);
-        locoCab.position.set(0, 1.5 + (3.5-3)/2 , -locoBodyGeo.parameters.depth/2 - locoCabGeo.parameters.depth/2 +1);
-        locoCab.castShadow = true;
-        locomotiveBody.add(locoCab);
-
-        addWheels(locomotiveBody, 3.5, 8, 1.2, 0xC0392B);
-
-        // Coupling from Locomotive
-        const couplingMat = new THREE.MeshStandardMaterial({color: 0x555555, roughness:0.6});
-        const couplingGeo = new THREE.CylinderGeometry(0.3,0.3,1.5,8);
-        couplingGeo.computeBoundingSphere();
-        couplingGeo.computeBoundingBox();
-        const coupling1 = new THREE.Mesh(couplingGeo, couplingMat);
-        coupling1.rotation.x = Math.PI/2;
-        coupling1.position.set(0, 1, locomotiveBody.position.z + locoBodyGeo.parameters.depth/2 + 0.75);
-        locomotiveBody.add(coupling1);
-
-        // Carriage 1
-        const carriageMat = new THREE.MeshStandardMaterial({ color: 0x2471A3, roughness: 0.5, metalness: 0.2 });
-        const carriage1 = new THREE.Group();
-        const carriageBodyGeo = new THREE.BoxGeometry(3.5, 3.2, 12);
-        carriageBodyGeo.computeBoundingSphere();
-        carriageBodyGeo.computeBoundingBox();
-        const carriageBody = new THREE.Mesh(carriageBodyGeo, carriageMat);
-        carriageBody.castShadow = true;
-        carriage1.add(carriageBody);
-
-        carriage1.position.set(0, 1.6, -13);
-        train.add(carriage1);
-        addWheels(carriageBody, 3.2, 12, 1.0, 0x2980B9);
-
-        // Coupling to Carriage
-        const coupling2 = new THREE.Mesh(couplingGeo, couplingMat); // Re-use geo and mat
-        coupling2.rotation.x = Math.PI/2;
-        coupling2.position.set(0,0, carriageBodyGeo.parameters.depth/2 + 0.75);
-        carriageBody.add(coupling2);
-
-        scene.add(train);
-    }
-
-    function addWheels(vehiclePartMesh, vehicleHeight, vehicleLength, wheelRadius, partColor) {
-        const wheelMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.6, metalness: 0.3 });
-        const wheelGeo = new THREE.CylinderGeometry(wheelRadius, wheelRadius, 0.6, 16);
-        wheelGeo.computeBoundingSphere();
-        wheelGeo.computeBoundingBox();
-
-        const axleRadius = 0.15;
-        const axleMat = new THREE.MeshStandardMaterial({color: 0x777777, roughness:0.5});
-        const axleGeo = new THREE.CylinderGeometry(axleRadius, axleRadius, vehiclePartMesh.geometry.parameters.width + 0.6, 8);
-        axleGeo.computeBoundingSphere();
-        axleGeo.computeBoundingBox();
-
-        const wheelYOffset = - (vehicleHeight / 2) + wheelRadius - 0.1;
-        const numWheelPairs = 2;
-
-        for (let i = 0; i < numWheelPairs; i++) {
-            const zPos = (vehicleLength / 2 - wheelRadius * 1.8) * (i === 0 ? 1 : -1);
-
-            const wheelL = new THREE.Mesh(wheelGeo, wheelMat);
-            wheelL.rotation.z = Math.PI / 2;
-            wheelL.position.set(-vehiclePartMesh.geometry.parameters.width / 2 - 0.3, wheelYOffset, zPos);
-            wheelL.castShadow = true;
-            vehiclePartMesh.add(wheelL);
-
-            const wheelR = new THREE.Mesh(wheelGeo, wheelMat);
-            wheelR.rotation.z = Math.PI / 2;
-            wheelR.position.set(vehiclePartMesh.geometry.parameters.width / 2 + 0.3, wheelYOffset, zPos);
-            wheelR.castShadow = true;
-            vehiclePartMesh.add(wheelR);
-
-            const axle = new THREE.Mesh(axleGeo, axleMat);
-            axle.rotation.z = Math.PI/2;
-            axle.position.set(0, wheelYOffset, zPos);
-            vehiclePartMesh.add(axle);
-
-            if (!vehiclePartMesh.userData.wheels) vehiclePartMesh.userData.wheels = [];
-            vehiclePartMesh.userData.wheels.push(wheelL, wheelR);
-        }
-    }
-
-
-    function createTrackPath() {
-        trackPath = new THREE.CatmullRomCurve3([
-            new THREE.Vector3(-200, 0.2, 0),
-            new THREE.Vector3(0, 0.2, 0),
-            new THREE.Vector3(100, 0.2, 100),
-            new THREE.Vector3(200, 0.2, 200),
-            new THREE.Vector3(300, 0.2, 200),
-            new THREE.Vector3(350, 0.2, 150),
-            new THREE.Vector3(350, 0.2, 50),
-            new THREE.Vector3(300, 0.2, -50),
-            new THREE.Vector3(200, 0.2, -150),
-            new THREE.Vector3(50, 0.2, -150),
-            new THREE.Vector3(-100, 0.2, -100),
-            new THREE.Vector3(-200, 0.2, 0)
-        ]);
-        trackPath.closed = true;
-    }
-
-    function drawTrack() {
-        const points = trackPath.getPoints(400);
-        const railMaterial = new THREE.MeshStandardMaterial({ color: 0x505050, roughness:0.6, metalness:0.5 });
-        const sleeperMaterial = new THREE.MeshStandardMaterial({ color: 0x6D4C41, roughness:0.85 });
-        const ballastMaterial = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.9, map: createBallastTexture() });
-
-        const railWidth = 0.15;
-        const railHeight = 0.25;
-        const railOffset = 1.2;
-        const sleeperWidth = 3.2;
-        const sleeperHeight = 0.20;
-        const sleeperDepth = 0.5;
-
-        const ballastWidth = 5;
-        const ballastHeight = 0.4;
-
-        for (let i = 0; i < points.length; i++) {
-            const p1 = points[i];
-            const p2 = points[(i + 1) % points.length];
-            const segmentLength = p1.distanceTo(p2);
-
-            if (segmentLength < 0.01) continue;
-
-            const tangentVec = p2.clone().sub(p1);
-            if (tangentVec.lengthSq() < 0.00001) continue;
-            const tangent = tangentVec.normalize();
-
-            const normal = new THREE.Vector3(0, 1, 0);
-            const binormal = new THREE.Vector3().crossVectors(tangent, normal).normalize();
-
-            // Ballast
-            if (i % 2 === 0) {
-                const ballastGeo = new THREE.BoxGeometry(ballastWidth, ballastHeight, segmentLength + 0.1);
-                ballastGeo.computeBoundingSphere();
-                ballastGeo.computeBoundingBox();
-                const ballast = new THREE.Mesh(ballastGeo, ballastMaterial);
-                ballast.position.copy(p1).add(tangent.clone().multiplyScalar(segmentLength / 2));
-                ballast.position.y -= ballastHeight / 2;
-                ballast.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), tangent);
-                ballast.receiveShadow = true;
-                trackObjects.add(ballast);
-            }
-
-            // Rails
-            const railGeo = new THREE.BoxGeometry(railWidth, railHeight, segmentLength + 0.01);
-            railGeo.computeBoundingSphere();
-            railGeo.computeBoundingBox();
-
-            const railL = new THREE.Mesh(railGeo, railMaterial);
-            const railR = new THREE.Mesh(railGeo, railMaterial);
-
-            const midPoint = p1.clone().add(tangent.clone().multiplyScalar(segmentLength / 2));
-
-            railL.position.copy(midPoint).add(binormal.clone().multiplyScalar(railOffset));
-            railL.position.y += railHeight/2;
-            railL.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), tangent);
-            railL.castShadow = true;
-            trackObjects.add(railL);
-
-            railR.position.copy(midPoint).add(binormal.clone().multiplyScalar(-railOffset));
-            railR.position.y += railHeight/2;
-            railR.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), tangent);
-            railR.castShadow = true;
-            trackObjects.add(railR);
-
-            // Sleepers
-            if (i % 5 === 0) {
-                const sleeperGeo = new THREE.BoxGeometry(sleeperWidth, sleeperHeight, sleeperDepth);
-                sleeperGeo.computeBoundingSphere();
-                sleeperGeo.computeBoundingBox();
-                const sleeper = new THREE.Mesh(sleeperGeo, sleeperMaterial);
-                sleeper.position.copy(p1);
-                // Align sleeper perpendicular to track but flat on XZ plane initially
-                const sleeperUp = new THREE.Vector3(0,1,0);
-                const sleeperLookAt = p1.clone().add(binormal); // Look along binormal
-                sleeper.lookAt(sleeperLookAt);
-                // Then rotate to align its "width" (X-axis) with the tangent
-                sleeper.rotateOnAxis(new THREE.Vector3(0,1,0), Math.atan2(tangent.x, tangent.z));
-
-                sleeper.castShadow = true;
-                trackObjects.add(sleeper);
-            }
-        }
-        scene.add(trackObjects);
-    }
-
-    function createBallastTexture() {
-        const canvas = document.createElement('canvas');
-        canvas.width = 64;
-        canvas.height = 64;
-        const context = canvas.getContext('2d');
-        context.fillStyle = '#909090';
-        context.fillRect(0,0,64,64);
-        for (let i=0; i < 100; i++) {
-            const x = Math.random() * 64;
-            const y = Math.random() * 64;
-            const size = Math.random() * 2 + 1;
-            const shade = Math.floor(Math.random() * 50 + 150);
-            context.fillStyle = `rgb(${shade},${shade},${shade})`;
-            context.fillRect(x,y,size,size);
-        }
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(1, 5);
-        return texture;
-    }
-
-    function createScenery() {
-        const trackSafetyMargin = 15;
-
-        // Trees & Forests
-        const treeMaterialDark = new THREE.MeshStandardMaterial({ color: 0x1B5E20, roughness:0.85 });
-        const treeMaterialLight = new THREE.MeshStandardMaterial({ color: 0x388E3C, roughness:0.8 });
-        const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x4E342E, roughness:0.9 });
-
-        for (let i = 0; i < 200; i++) {
-            const treeGroup = new THREE.Group();
-            const trunkHeight = Math.random() * 4 + 4;
-            const trunkGeo = new THREE.CylinderGeometry(0.4 + Math.random()*0.3, 0.5 + Math.random()*0.4, trunkHeight, 8);
-            trunkGeo.computeBoundingSphere();
-            trunkGeo.computeBoundingBox();
-            const trunk = new THREE.Mesh(trunkGeo, trunkMaterial);
-            trunk.position.y = trunkHeight / 2;
-            trunk.castShadow = true;
-            treeGroup.add(trunk);
-
-            const leavesHeight = Math.random() * 5 + 5;
-            const leavesRadius = Math.random() * 2 + 2;
-            const leavesGeo = new THREE.ConeGeometry(leavesRadius, leavesHeight, 12);
-            leavesGeo.computeBoundingSphere();
-            leavesGeo.computeBoundingBox();
-            const leaves = new THREE.Mesh(Math.random() < 0.5 ? treeMaterialDark : treeMaterialLight, leavesGeo);
-            leaves.position.y = trunkHeight + leavesHeight / 2 - 0.8;
-            leaves.castShadow = true;
-            treeGroup.add(leaves);
-
-            let randomTrackPoint, randomAngle, randomDistance, candidatePos;
-            let tooClose = true;
-            let attempts = 0;
-
-            while(tooClose && attempts < 10) {
-                randomTrackPoint = trackPath.getPointAt(Math.random());
-                randomAngle = Math.random() * Math.PI * 2;
-                randomDistance = (Math.random() < 0.7 ? Math.random() * 150 + 50 : Math.random() * 40 + trackSafetyMargin);
-
-                candidatePos = new THREE.Vector3(
-                    randomTrackPoint.x + Math.cos(randomAngle) * randomDistance,
-                    0,
-                    randomTrackPoint.z + Math.sin(randomAngle) * randomDistance
-                );
-
-                let minDistanceToTrack = Infinity;
-                for(let j=0; j < 50; j++){
-                    let checkPoint = trackPath.getPointAt(j/50);
-                    let d = candidatePos.distanceTo(checkPoint);
-                    if(d < minDistanceToTrack) minDistanceToTrack = d;
-                }
-                if(minDistanceToTrack > trackSafetyMargin) tooClose = false;
-                attempts++;
-            }
-            if(!tooClose){
-                treeGroup.position.copy(candidatePos);
-                sceneryObjects.add(treeGroup);
-            }
-        }
-
-        // Houses
-        const houseWallMat = new THREE.MeshStandardMaterial({color: 0xD2B48C, roughness:0.8});
-        const houseRoofMat = new THREE.MeshStandardMaterial({color: 0x8B4513, roughness:0.7});
-        for(let i=0; i<15; i++){
-            const houseGroup = new THREE.Group();
-            const houseWidth = Math.random()*5 + 8;
-            const houseDepth = Math.random()*4 + 6;
-            const houseHeight = Math.random()*2 + 4;
-
-            const wallGeo = new THREE.BoxGeometry(houseWidth, houseHeight, houseDepth);
-            wallGeo.computeBoundingSphere();
-            wallGeo.computeBoundingBox();
-            const walls = new THREE.Mesh(wallGeo, houseWallMat);
-            walls.position.y = houseHeight/2;
-            walls.castShadow = true;
-            houseGroup.add(walls);
-
-            const roofGeo = new THREE.ConeGeometry(houseWidth*0.7, houseHeight*0.8, 4);
-            roofGeo.computeBoundingSphere();
-            roofGeo.computeBoundingBox();
-            const roof = new THREE.Mesh(roofGeo, houseRoofMat);
-            roof.position.y = houseHeight + houseHeight*0.4 - 0.1;
-            roof.rotation.y = Math.PI/4;
-            roof.castShadow = true;
-            houseGroup.add(roof);
-
-            let randomTrackPoint, randomAngle, randomDistance, candidatePos;
-            let tooClose = true;
-            let attempts = 0;
-            while(tooClose && attempts < 10) {
-                randomTrackPoint = trackPath.getPointAt(Math.random());
-                randomAngle = Math.random() * Math.PI * 2;
-                randomDistance = Math.random() * 100 + trackSafetyMargin + 20;
-
-                candidatePos = new THREE.Vector3(
-                    randomTrackPoint.x + Math.cos(randomAngle) * randomDistance,
-                    0,
-                    randomTrackPoint.z + Math.sin(randomAngle) * randomDistance
-                );
-                let minDistanceToTrack = Infinity;
-                for(let j=0; j < 50; j++){
-                    let checkPoint = trackPath.getPointAt(j/50);
-                    let d = candidatePos.distanceTo(checkPoint);
-                    if(d < minDistanceToTrack) minDistanceToTrack = d;
-                }
-                if(minDistanceToTrack > trackSafetyMargin + 10) tooClose = false;
-                attempts++;
-            }
-            if(!tooClose){
-                houseGroup.position.copy(candidatePos);
-                houseGroup.rotation.y = Math.random() * Math.PI * 2;
-                sceneryObjects.add(houseGroup);
-            }
-        }
-
-        const stationPoint = trackPath.getPointAt(0.1);
-        const stationTangent = trackPath.getTangentAt(0.1).normalize();
-        const stationBinormal = new THREE.Vector3().crossVectors(stationTangent, new THREE.Vector3(0,1,0)).normalize();
-
-        const stationGroup = new THREE.Group();
-        const platformGeo = new THREE.BoxGeometry(40, 1.5, 10);
-        platformGeo.computeBoundingSphere();
-        platformGeo.computeBoundingBox();
-        const platformMat = new THREE.MeshStandardMaterial({ color: 0x9E9E9E, roughness:0.7 });
-        const platform = new THREE.Mesh(platformGeo, platformMat);
-        platform.position.copy(stationPoint).add(stationBinormal.clone().multiplyScalar(10));
-        platform.position.y = 0.75;
-
-        // Align station platform with the track tangent
-        const platformLookAtTarget = platform.position.clone().add(stationTangent);
-        platform.lookAt(platformLookAtTarget);
-
-        platform.receiveShadow = true;
-        platform.castShadow = true;
-        stationGroup.add(platform);
-
-        const stationRoofGeo = new THREE.BoxGeometry(42, 0.5, 12);
-        stationRoofGeo.computeBoundingSphere();
-        stationRoofGeo.computeBoundingBox();
-        const stationRoofMat = new THREE.MeshStandardMaterial({color: 0xA1887F});
-        const stationRoof = new THREE.Mesh(stationRoofGeo, stationRoofMat);
-        stationRoof.position.set(0, 4, 0);
-        platform.add(stationRoof); // Add roof as child, it will inherit platform's rotation
-
-        const passengerMat = new THREE.MeshStandardMaterial({ color: 0x4FC3F7, roughness:0.6 });
-        const passengerGeo = new THREE.CylinderGeometry(0.3, 0.3, 1.7, 8);
-        passengerGeo.computeBoundingSphere();
-        passengerGeo.computeBoundingBox();
-        for(let i=0; i<8; i++) {
-            const passenger = new THREE.Mesh(passengerGeo, passengerMat);
-            passenger.position.set(-15 + i*4, 1.7/2, Math.random()*4 - 2);
-            passenger.castShadow = true;
-            platform.add(passenger);
-        }
-        sceneryObjects.add(stationGroup);
-    }
-
-
-    function updateTrain() {
-        if (isAccelerating) trainSpeed += trainAcceleration;
-        else if (isBraking) trainSpeed -= trainBrakingForce;
-        else trainSpeed -= trainDeceleration;
-
-        trainSpeed = Math.max(0, Math.min(trainSpeed, maxTrainSpeed));
-        speedDisplay.textContent = Math.floor(trainSpeed * 150);
-
-        let actualSpeedFactor = trainSpeed * 0.0015;
-
-        if (trainSpeed > 0.0001) {
-            trackPosition += actualSpeedFactor;
-            if (trackPosition >= 1) trackPosition -= 1;
-            if (trackPosition < 0) trackPosition += 1;
-        }
-
-        const currentPoint = trackPath.getPointAt(trackPosition);
-        const tangent = trackPath.getTangentAt(trackPosition).normalize();
-
-        train.position.copy(currentPoint);
-        train.position.y = 0.6 + 0.2; // Account for ballast height
-
-        const lookAtPoint = currentPoint.clone().add(tangent);
-        train.lookAt(lookAtPoint);
-
-        train.traverse((object) => {
-            if (object.isMesh && object.parent && object.parent.userData.wheels && object.parent.userData.wheels.includes(object)) {
-                object.rotation.x -= actualSpeedFactor * 25;
-            }
-        });
-
-        const idealOffset = new THREE.Vector3(0, 18, -30);
-        const idealLookAt = new THREE.Vector3(0, 3, 40);
-
-        const offset = idealOffset.clone().applyQuaternion(train.quaternion);
-        const cameraTargetPosition = train.position.clone().add(offset);
-
-        const lookAtTargetPosition = train.position.clone().add(idealLookAt.clone().applyQuaternion(train.quaternion));
-
-        camera.position.lerp(cameraTargetPosition, 0.07);
-        camera.lookAt(lookAtTargetPosition);
-    }
-
-    function animate() {
-        requestAnimationFrame(animate);
-        updateTrain();
-        renderer.render(scene, camera);
-    }
-
-    // --- Event Listeners ---
-    document.getElementById('speedUpBtn').addEventListener('mousedown', () => isAccelerating = true);
-    document.getElementById('speedUpBtn').addEventListener('mouseup', () => isAccelerating = false);
-    document.getElementById('speedUpBtn').addEventListener('mouseleave', () => isAccelerating = false);
-
-    document.getElementById('slowDownBtn').addEventListener('mousedown', () => isBraking = true);
-    document.getElementById('slowDownBtn').addEventListener('mouseup', () => isBraking = false);
-    document.getElementById('slowDownBtn').addEventListener('mouseleave', () => isBraking = false);
-
-    document.getElementById('hornBtn').addEventListener('click', () => {
-        hornMessageElement.style.opacity = '1';
-        setTimeout(() => { hornMessageElement.style.opacity = '0'; }, 1000);
-    });
-
-    window.addEventListener('keydown', (e) => {
-        if (e.key === 'ArrowUp') isAccelerating = true;
-        if (e.key === 'ArrowDown') isBraking = true;
-        if (e.key === ' ' || e.key === 'Spacebar') {
-            e.preventDefault();
-            if (hornMessageElement.style.opacity !== '1') {
-                hornMessageElement.style.opacity = '1';
-                setTimeout(() => { hornMessageElement.style.opacity = '0'; }, 1000);
-            }
-        }
-    });
-    window.addEventListener('keyup', (e) => {
-        if (e.key === 'ArrowUp') isAccelerating = false;
-        if (e.key === 'ArrowDown') isBraking = false;
-    });
-
-    document.getElementById('speedUpBtn').addEventListener('touchstart', (e) => { e.preventDefault(); isAccelerating = true; });
-    document.getElementById('speedUpBtn').addEventListener('touchend', (e) => { e.preventDefault(); isAccelerating = false; });
-    document.getElementById('slowDownBtn').addEventListener('touchstart', (e) => { e.preventDefault(); isBraking = true; });
-    document.getElementById('slowDownBtn').addEventListener('touchend', (e) => { e.preventDefault(); isBraking = false; });
-    document.getElementById('hornBtn').addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        hornMessageElement.style.opacity = '1';
-        setTimeout(() => { hornMessageElement.style.opacity = '0'; }, 1000);
-    });
-
-    window.addEventListener('resize', () => {
-        camera.aspect = gameContainer.clientWidth / gameContainer.clientHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(gameContainer.clientWidth, gameContainer.clientHeight);
-    });
-
-    initThreeJS();
-
-</script>
 </body>
 </html>
