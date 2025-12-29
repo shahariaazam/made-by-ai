@@ -607,8 +607,8 @@
         ctx.lineJoin = 'round';
 
         if (state.tool === 'eraser') {
-            ctx.globalCompositeOperation = 'destination-out'; // Realistic erasing
-            ctx.strokeStyle = 'rgba(0,0,0,1)';
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.strokeStyle = '#FFFAF0'; // Paint with paper color to "erase"
         } else {
             ctx.globalCompositeOperation = 'source-over';
             ctx.strokeStyle = state.color;
