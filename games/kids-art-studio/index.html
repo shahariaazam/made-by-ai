@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Kids Art Studio</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap');
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Fredoka One', cursive;
+            background-color: #333;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1;
+            touch-action: none !important;
+            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="rgba(255,255,255,0.8)" stroke="black" stroke-width="2"/></svg>') 12 12, auto;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        /* Skeuomorphic UI Elements */
+        .wood-panel {
+            background: #8D6E63;
+            background-image: linear-gradient(45deg, rgba(0,0,0,0.1) 25%, transparent 25%, transparent 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1) 75%, transparent 75%, transparent);
+            background-size: 20px 20px;
+            border: 4px solid #5D4037;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3), inset 0 2px 5px rgba(255,255,255,0.2);
+            border-radius: 15px;
+            pointer-events: auto;
+        }
+
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .title-badge {
+            background: #FFD93D;
+            color: #5D4037;
+            padding: 10px 25px;
+            border-radius: 50px;
+            font-size: 24px;
+            border: 4px solid #fff;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transform: rotate(-2deg);
+        }
+
+        .tools-panel {
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            align-items: center;
+            width: 80px;
+        }
+
+        .tool-btn {
+            width: 60px;
+            height: 60px;
+            border: none;
+            border-radius: 12px;
+            background: #fff;
+            font-size: 28px;
+            cursor: pointer;
+            box-shadow: 0 6px 0 #ccc, 0 10px 10px rgba(0,0,0,0.2);
+            transition: transform 0.1s, box-shadow 0.1s;
+            position: relative;
+        }
+
+        .tool-btn:active {
+            transform: translateY(6px);
+            box-shadow: 0 0 0 #ccc, inset 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .tool-btn.active-tool {
+            background: #FFD93D;
+            border: 3px solid #5D4037;
+            transform: translateY(2px);
+            box-shadow: 0 4px 0 #c4a318;
+        }
+
+        .tool-btn.delete { background: #FF6B6B; box-shadow: 0 6px 0 #c93434; color: white; }
+        .tool-btn.save { background: #6BCB77; box-shadow: 0 6px 0 #4cae4c; color: white; }
+
+        /* Custom Range Slider */
+        .size-control {
+            background: rgba(255,255,255,0.9);
+            padding: 10px;
+            border-radius: 20px;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        input[type=range] {
+            writing-mode: bt-lr; /* IE/Edge */
+            -webkit-appearance: slider-vertical; /* WebKit */
+            width: 20px;
+            height: 100px;
+            accent-color: #5D4037;
+        }
+
+        /* Help Text */
+        .instruction {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.6);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: 18px;
+            pointer-events: none;
+            opacity: 0.8;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        #loading {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #87CEEB;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: opacity 0.8s;
+        }
+        .loading-text {
+            color: white; font-size: 32px; margin-top: 20px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 6px solid #fff; border-top: 6px solid #FFD93D;
+            border-radius: 50%; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        #toast {
+            position: absolute;
+            top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            color: #333;
+            padding: 20px 40px;
+            border-radius: 20px;
+            font-size: 24px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 50;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border: 4px solid #6BCB77;
+            text-align: center;
+            transform: translate(-50%, -50%) scale(0.8);
+        }
+        #toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+    </style>
+</head>
+<body>
+
+<div id="loading">
+    <div class="spinner"></div>
+    <div class="loading-text">Building Art Studio... 🔨</div>
+</div>
+
+<div id="toast">
+    <div>📸 Picture Saved!</div>
+    <div style="font-size: 16px; margin-top: 5px; color: #666;">Great job!</div>
+</div>
+
+<div id="ui-layer">
+    <div class="top-bar">
+        <div class="title-badge">🎨 Kids Studio</div>
+
+        <div class="wood-panel tools-panel">
+            <button class="tool-btn active-tool" id="brush-btn" title="Brush">🖌️</button>
+            <button class="tool-btn" id="eraser-btn" title="Eraser">🧼</button>
+
+            <div class="size-control">
+                <input type="range" id="brush-size" min="2" max="50" value="10" title="Size">
+            </div>
+
+            <button class="tool-btn" id="undo-btn" title="Undo" disabled>↩️</button>
+            <button class="tool-btn delete" id="clear-btn" title="Clear Canvas">🗑️</button>
+            <button class="tool-btn save" id="save-btn" title="Save Art">📸</button>
+        </div>
+    </div>
+
+    <div class="instruction">
+        Click the paint tubes to pick colors! 🎨
+    </div>
+</div>
+
+<div id="canvas-container"></div>
+
+<script>
+    // --- 1. PROCEDURAL TEXTURE GENERATORS ---
+
+    // Generate Realistic Wood Texture
+    function createWoodTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512; canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+
+        // Base Color
+        ctx.fillStyle = '#8D6E63';
+        ctx.fillRect(0,0,512,512);
+
+        // Grain
+        ctx.strokeStyle = '#6D4C41';
+        ctx.globalAlpha = 0.2;
+        ctx.lineWidth = 2;
+
+        for(let i=0; i<100; i++) {
+            ctx.beginPath();
+            ctx.moveTo(Math.random()*512, 0);
+            // Wavy lines
+            ctx.bezierCurveTo(
+                Math.random()*512, 170,
+                Math.random()*512, 340,
+                Math.random()*512, 512
+            );
+            ctx.stroke();
+        }
+        // Knots
+        for(let i=0; i<5; i++) {
+            ctx.beginPath();
+            ctx.fillStyle = '#5D4037';
+            const x = Math.random()*512;
+            const y = Math.random()*512;
+            ctx.ellipse(x, y, 10 + Math.random()*20, 30 + Math.random()*40, Math.random()*0.5, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        return tex;
+    }
+
+    // Generate Floor Texture (Planks)
+    function createFloorTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1024; canvas.height = 1024;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#A1887F';
+        ctx.fillRect(0,0,1024,1024);
+
+        // Planks
+        ctx.strokeStyle = '#5D4037';
+        ctx.lineWidth = 5;
+        for(let i=0; i<1024; i+=100) {
+            ctx.beginPath();
+            ctx.moveTo(i, 0);
+            ctx.lineTo(i, 1024);
+            ctx.stroke();
+
+            // Random plank ends
+            for(let j=0; j<10; j++) {
+                const y = Math.random() * 1024;
+                ctx.beginPath();
+                ctx.moveTo(i, y);
+                ctx.lineTo(i+100, y);
+                ctx.stroke();
+            }
+        }
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(4, 4);
+        return tex;
+    }
+
+    // --- 2. CONFIG & STATE ---
+    const config = {
+        colors: ['#FF6B6B', '#FF9F43', '#F39C12', '#FFD93D', '#6BCB77', '#2ECC71', '#4D96FF', '#54A0FF', '#5F27CD', '#9B59B6', '#333333', '#FFFFFF'],
+        canvasSize: 1024,
+    };
+
+    const state = {
+        isDrawing: false,
+        tool: 'brush',
+        color: '#FF6B6B',
+        size: 10,
+        lastUV: null,
+        history: [],
+        historyStep: -1,
+        maxHistory: 15
+    };
+
+    // --- 3. SCENE SETUP ---
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    // Soft indoor fog
+    scene.fog = new THREE.Fog(0xFFF3E0, 5, 25);
+
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 2.5, 5); // Higher angle to see the table
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    // --- 4. LIGHTING & ENVIRONMENT ---
+    const ambientLight = new THREE.AmbientLight(0xFFFFFF, 0.5);
+    scene.add(ambientLight);
+
+    // Sun light coming from "Window"
+    const sunLight = new THREE.DirectionalLight(0xFFF9C4, 1.0);
+    sunLight.position.set(-5, 5, 2);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.bias = -0.0001;
+    scene.add(sunLight);
+
+    // Warm indoor bulb light
+    const bulbLight = new THREE.PointLight(0xFFCC80, 0.4, 10);
+    bulbLight.position.set(2, 4, 2);
+    scene.add(bulbLight);
+
+    // -- ROOM CONSTRUCTION --
+    const woodTex = createWoodTexture();
+    const floorTex = createFloorTexture();
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0xFFF3E0, side: THREE.BackSide });
+    const floorMat = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.8 });
+
+    // Room Box
+    const room = new THREE.Mesh(new THREE.BoxGeometry(12, 8, 12), wallMat);
+    room.position.y = 4;
+    room.receiveShadow = true;
+    scene.add(room);
+
+    // Floor
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), floorMat);
+    floor.rotation.x = -Math.PI/2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // Window Frame (Left Wall)
+    const windowFrame = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3, 4), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+    windowFrame.position.set(-5.9, 3, 0);
+    scene.add(windowFrame);
+
+    // Sky Plane outside window
+    const skyGeo = new THREE.PlaneGeometry(10, 10);
+    const skyMat = new THREE.MeshBasicMaterial({ color: 0x87CEEB });
+    const sky = new THREE.Mesh(skyGeo, skyMat);
+    sky.position.set(-6.5, 3, 0);
+    sky.rotation.y = Math.PI/2;
+    scene.add(sky);
+
+    // Simple Tree outside (Green cone)
+    const treeGeo = new THREE.ConeGeometry(1.5, 4, 8);
+    const treeMat = new THREE.MeshBasicMaterial({color: 0x4CAF50});
+    const tree = new THREE.Mesh(treeGeo, treeMat);
+    tree.position.set(-8, 1, -1);
+    scene.add(tree);
+
+    // --- 5. EASEL & CANVAS ---
+    const easelGroup = new THREE.Group();
+    scene.add(easelGroup);
+
+    const woodMat = new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.9, color: 0xccbba0 });
+
+    // Detailed Easel Legs
+    const legGeo = new THREE.BoxGeometry(0.15, 4.0, 0.1);
+    const leftLeg = new THREE.Mesh(legGeo, woodMat);
+    leftLeg.position.set(-0.8, 2.0, 0);
+    leftLeg.rotation.z = 0.2;
+    leftLeg.rotation.x = -0.25;
+    leftLeg.castShadow = true;
+    easelGroup.add(leftLeg);
+
+    const rightLeg = new THREE.Mesh(legGeo, woodMat);
+    rightLeg.position.set(0.8, 2.0, 0);
+    rightLeg.rotation.z = -0.2;
+    rightLeg.rotation.x = -0.25;
+    rightLeg.castShadow = true;
+    easelGroup.add(rightLeg);
+
+    const rearLeg = new THREE.Mesh(new THREE.BoxGeometry(0.15, 4.0, 0.1), woodMat);
+    rearLeg.position.set(0, 2.0, -1.2);
+    rearLeg.rotation.x = 0.3;
+    rearLeg.castShadow = true;
+    easelGroup.add(rearLeg);
+
+    // Canvas Shelf
+    const shelf = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.1, 0.4), woodMat);
+    shelf.position.set(0, 1.2, 0.5);
+    shelf.rotation.x = -0.25;
+    shelf.castShadow = true; shelf.receiveShadow = true;
+    easelGroup.add(shelf);
+
+    // -- DRAWING BOARD --
+    const drawingCanvas = document.createElement('canvas');
+    drawingCanvas.width = config.canvasSize;
+    drawingCanvas.height = config.canvasSize;
+    const ctx = drawingCanvas.getContext('2d', { willReadFrequently: true });
+
+    // Initial "Paper" texture on canvas
+    ctx.fillStyle = '#FFFAF0'; // Ivory
+    ctx.fillRect(0, 0, config.canvasSize, config.canvasSize);
+    // Add noise
+    for(let i=0; i<50000; i++) {
+        ctx.fillStyle = Math.random() > 0.5 ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.05)';
+        ctx.fillRect(Math.random()*config.canvasSize, Math.random()*config.canvasSize, 2, 2);
+    }
+
+    const canvasTexture = new THREE.CanvasTexture(drawingCanvas);
+    canvasTexture.minFilter = THREE.LinearFilter;
+    canvasTexture.magFilter = THREE.LinearFilter;
+
+    const boardGeo = new THREE.BoxGeometry(1.5, 1.2, 0.05);
+    const boardMat = new THREE.MeshStandardMaterial({ map: canvasTexture, roughness: 1.0 });
+    const paintingMesh = new THREE.Mesh(boardGeo, boardMat); // This handles the raycast
+    // Adjust UVs so the texture covers the front face properly
+    // Box UVs are tricky, simpler to put a plane in front of a box
+
+    // Simple Board backing
+    const backing = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.3, 0.05), woodMat);
+    backing.position.set(0, 2.0, 0.25);
+    backing.rotation.x = -0.25;
+    easelGroup.add(backing);
+
+    // Actual Painting Surface (Plane)
+    const paintSurface = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.2), new THREE.MeshBasicMaterial({map: canvasTexture}));
+    paintSurface.position.set(0, 2.0, 0.29); // Slightly in front
+    paintSurface.rotation.x = -0.25;
+    easelGroup.add(paintSurface);
+
+    // Save initial history
+    saveHistoryState();
+
+    // --- 6. 3D PAINT TUBES & TABLE ---
+    const tableGroup = new THREE.Group();
+    scene.add(tableGroup);
+
+    // Table Top
+    const tableTop = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.2, 1.5), woodMat);
+    tableTop.position.set(0, 0.6, 1.5);
+    tableTop.receiveShadow = true;
+    tableTop.castShadow = true;
+    tableGroup.add(tableTop);
+
+    // Table Legs
+    const legParams = [0.1, 0.6, 0.1];
+    const tLeg1 = new THREE.Mesh(new THREE.BoxGeometry(...legParams), woodMat); tLeg1.position.set(-1.6, 0.3, 0.85); tableGroup.add(tLeg1);
+    const tLeg2 = new THREE.Mesh(new THREE.BoxGeometry(...legParams), woodMat); tLeg2.position.set(1.6, 0.3, 0.85); tableGroup.add(tLeg2);
+    const tLeg3 = new THREE.Mesh(new THREE.BoxGeometry(...legParams), woodMat); tLeg3.position.set(-1.6, 0.3, 2.15); tableGroup.add(tLeg3);
+    const tLeg4 = new THREE.Mesh(new THREE.BoxGeometry(...legParams), woodMat); tLeg4.position.set(1.6, 0.3, 2.15); tableGroup.add(tLeg4);
+
+    // Paint Tubes Generation
+    const paintSupplies = []; // Array to store tube meshes for raycasting
+    const tubeGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.3, 16);
+    const capGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.08, 16);
+
+    config.colors.forEach((color, i) => {
+        const tubeGroup = new THREE.Group();
+
+        // Tube Body
+        const tubeMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.3, metalness: 0.1 });
+        const tube = new THREE.Mesh(tubeGeo, tubeMat);
+        tube.rotation.z = Math.PI / 2;
+        tube.castShadow = true;
+
+        // Tube Cap (Black)
+        const cap = new THREE.Mesh(capGeo, new THREE.MeshStandardMaterial({ color: 0x333333 }));
+        cap.rotation.z = Math.PI / 2;
+        cap.position.x = 0.2;
+
+        // Crimped End (Box)
+        const crimp = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.12, 0.14), new THREE.MeshStandardMaterial({color: 0xffffff}));
+        crimp.position.x = -0.15;
+
+        tubeGroup.add(crimp);
+        tubeGroup.add(tube);
+        tubeGroup.add(cap);
+
+        // Positioning on table
+        // Arrange in two rows
+        const row = i < 6 ? 0 : 1;
+        const col = i % 6;
+        const xOffset = (col - 2.5) * 0.4;
+        const zOffset = row * 0.3;
+
+        tubeGroup.position.set(xOffset, 0.75, 1.2 + zOffset);
+        // Random rotation for realism
+        tubeGroup.rotation.y = (Math.random() - 0.5) * 0.5;
+
+        scene.add(tubeGroup);
+
+        // Add custom property to identify color on click
+        tube.userData = { isPaint: true, color: color, originalScale: 1 };
+        paintSupplies.push(tube);
+    });
+
+    // --- 7. CONTROLS & INTERACTION ---
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.minDistance = 3;
+    controls.maxDistance = 7;
+    controls.maxPolarAngle = Math.PI / 2 - 0.1;
+    controls.target.set(0, 1.8, 0);
+
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    // -- DRAWING FUNCTION --
+    function draw(uv) {
+        const x = uv.x * config.canvasSize;
+        const y = (1 - uv.y) * config.canvasSize; // Invert Y for texture
+
+        ctx.lineWidth = state.size;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        if (state.tool === 'eraser') {
+            ctx.globalCompositeOperation = 'destination-out'; // Realistic erasing
+            ctx.strokeStyle = 'rgba(0,0,0,1)';
+        } else {
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.strokeStyle = state.color;
+
+            // Paint Effect
+            ctx.shadowBlur = 4;
+            ctx.shadowColor = state.color;
+        }
+
+        ctx.beginPath();
+        if (state.lastUV) {
+            const lx = state.lastUV.x * config.canvasSize;
+            const ly = (1 - state.lastUV.y) * config.canvasSize;
+            ctx.moveTo(lx, ly);
+        } else {
+            ctx.moveTo(x, y);
+        }
+        ctx.lineTo(x, y);
+        ctx.stroke();
+
+        // Reset shadow
+        ctx.shadowBlur = 0;
+
+        state.lastUV = uv;
+        canvasTexture.needsUpdate = true;
+    }
+
+    // -- EVENT HANDLERS --
+    function onPointerDown(event) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+
+        // 1. Check Canvas
+        const canvasIntersects = raycaster.intersectObject(paintSurface);
+        if (canvasIntersects.length > 0) {
+            state.isDrawing = true;
+            controls.enabled = false;
+            state.lastUV = null;
+            draw(canvasIntersects[0].uv);
+            return;
+        }
+
+        // 2. Check Paint Tubes
+        const tubeIntersects = raycaster.intersectObjects(paintSupplies);
+        if (tubeIntersects.length > 0) {
+            const hit = tubeIntersects[0].object;
+            if (hit.userData.isPaint) {
+                pickColor(hit.userData.color, hit);
+            }
+        }
+    }
+
+    function onPointerMove(event) {
+        if (!state.isDrawing) return;
+        event.preventDefault();
+
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObject(paintSurface);
+
+        if (intersects.length > 0) {
+            draw(intersects[0].uv);
+        } else {
+            state.lastUV = null;
+        }
+    }
+
+    function onPointerUp() {
+        if (state.isDrawing) {
+            state.isDrawing = false;
+            controls.enabled = true;
+            state.lastUV = null;
+            saveHistoryState();
+        }
+    }
+
+    const canvasEl = renderer.domElement;
+    canvasEl.addEventListener('pointerdown', onPointerDown, { capture: true });
+    canvasEl.addEventListener('pointermove', onPointerMove, { capture: true, passive: false });
+    canvasEl.addEventListener('pointerup', onPointerUp, { capture: true });
+
+    // --- 8. LOGIC & PARTICLES ---
+
+    function pickColor(color, mesh) {
+        state.color = color;
+        setTool('brush');
+
+        // Animation
+        const originalY = mesh.parent.position.y;
+        mesh.parent.position.y += 0.2;
+        setTimeout(() => {
+            mesh.parent.position.y = originalY;
+        }, 200);
+    }
+
+    function saveHistoryState() {
+        if (state.historyStep < state.history.length - 1) {
+            state.history = state.history.slice(0, state.historyStep + 1);
+        }
+        state.history.push(ctx.getImageData(0, 0, config.canvasSize, config.canvasSize));
+        state.historyStep++;
+        if (state.history.length > state.maxHistory) {
+            state.history.shift();
+            state.historyStep--;
+        }
+        updateUI();
+    }
+
+    function undo() {
+        if (state.historyStep > 0) {
+            state.historyStep--;
+            ctx.putImageData(state.history[state.historyStep], 0, 0);
+            canvasTexture.needsUpdate = true;
+            updateUI();
+        }
+    }
+
+    // Confetti System
+    const confettiParticles = [];
+    const confettiGeo = new THREE.PlaneGeometry(0.1, 0.1);
+
+    function spawnConfetti() {
+        for(let i=0; i<100; i++) {
+            const mat = new THREE.MeshBasicMaterial({ color: Math.random() * 0xffffff, side: THREE.DoubleSide });
+            const mesh = new THREE.Mesh(confettiGeo, mat);
+
+            mesh.position.set(0, 4, 1);
+            mesh.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, 0);
+
+            scene.add(mesh);
+            confettiParticles.push({
+                mesh: mesh,
+                vel: new THREE.Vector3((Math.random()-0.5)*0.2, Math.random()*0.2 + 0.1, (Math.random()-0.5)*0.2),
+                rot: new THREE.Vector3(Math.random()*0.2, Math.random()*0.2, Math.random()*0.2)
+            });
+        }
+    }
+
+    function updateConfetti() {
+        for(let i=confettiParticles.length-1; i>=0; i--) {
+            const p = confettiParticles[i];
+            p.mesh.position.add(p.vel);
+            p.mesh.rotation.x += p.rot.x;
+            p.mesh.rotation.y += p.rot.y;
+            p.vel.y -= 0.01; // Gravity
+
+            if (p.mesh.position.y < 0) {
+                scene.remove(p.mesh);
+                confettiParticles.splice(i, 1);
+            }
+        }
+    }
+
+    // --- 9. UI WIRING ---
+    function updateUI() {
+        document.getElementById('undo-btn').disabled = state.historyStep <= 0;
+    }
+
+    function setTool(t) {
+        state.tool = t;
+        document.getElementById('brush-btn').classList.toggle('active-tool', t==='brush');
+        document.getElementById('eraser-btn').classList.toggle('active-tool', t==='eraser');
+    }
+
+    document.getElementById('brush-btn').onclick = () => setTool('brush');
+    document.getElementById('eraser-btn').onclick = () => setTool('eraser');
+    document.getElementById('undo-btn').onclick = undo;
+    document.getElementById('brush-size').oninput = (e) => state.size = parseInt(e.target.value);
+
+    document.getElementById('save-btn').onclick = () => {
+        spawnConfetti();
+        const link = document.createElement('a');
+        link.download = `art-${Date.now()}.png`;
+        link.href = drawingCanvas.toDataURL('image/png');
+        link.click();
+
+        const toast = document.getElementById('toast');
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 3000);
+    };
+
+    document.getElementById('clear-btn').onclick = () => {
+        if(confirm("Throw away this painting and start new?")) {
+            ctx.fillStyle = '#FFFAF0';
+            ctx.fillRect(0, 0, config.canvasSize, config.canvasSize);
+            canvasTexture.needsUpdate = true;
+            saveHistoryState();
+        }
+    };
+
+    // --- 10. ANIMATION ---
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        updateConfetti();
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    window.onload = () => {
+        document.getElementById('loading').style.opacity = 0;
+        setTimeout(() => document.getElementById('loading').style.display = 'none', 800);
+        animate();
+    };
+
+</script>
+</body>
+</html>
