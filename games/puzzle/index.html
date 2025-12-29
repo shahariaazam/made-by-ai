@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>PuzzleCraft 3D - Sticky Wall Edition</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #1a202c; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #canvas-container { width: 100vw; height: 100vh; display: block; }
+        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .interactive { pointer-events: auto; }
+
+        /* Glassmorphism UI */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 1rem;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            text-align: center;
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 12px 24px;
+            color: white;
+            border-radius: 50px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 1.1rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: transform 0.1s, box-shadow 0.1s;
+            margin: 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn:active { transform: scale(0.95); }
+        .btn:hover { box-shadow: 0 6px 20px rgba(118, 75, 162, 0.4); }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.2);
+        }
+
+        #file-input { display: none; }
+
+        .hidden { display: none !important; }
+
+        /* Floating Animation for Title */
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        .animate-float { animation: float 3s ease-in-out infinite; }
+
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #f00;
+            animation: fall linear forwards;
+        }
+        @keyframes fall {
+            to { transform: translateY(100vh) rotate(720deg); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- 3D Canvas -->
+<div id="canvas-container"></div>
+
+<!-- Main Menu UI -->
+<div id="menu-ui" class="ui-layer interactive">
+    <div class="glass-panel max-w-md w-full mx-4">
+        <h1 class="text-4xl font-bold mb-2 animate-float">🧩 PuzzleCraft 3D</h1>
+        <p class="text-gray-300 mb-6">Sticky Wall Edition: Pieces stick where you put them!</p>
+
+        <div class="mb-6 space-y-2">
+            <label class="block text-sm text-gray-300 mb-1">Difficulty (Grid Size)</label>
+            <div class="flex justify-center gap-2">
+                <button class="btn btn-secondary text-sm px-4 py-2" onclick="setDifficulty(2)">2x2 (Easy)</button>
+                <button class="btn btn-secondary text-sm px-4 py-2" onclick="setDifficulty(3)">3x3 (Medium)</button>
+                <button class="btn btn-secondary text-sm px-4 py-2" onclick="setDifficulty(4)">4x4 (Hard)</button>
+            </div>
+            <p id="diff-label" class="text-xs text-blue-300 mt-1">Selected: 3x3</p>
+        </div>
+
+        <button class="btn w-full justify-center" onclick="document.getElementById('file-input').click()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Upload Image
+        </button>
+        <input type="file" id="file-input" accept="image/*" onchange="handleImageUpload(event)">
+
+        <div class="mt-4 text-xs text-gray-400">
+            Supports JPG, PNG. Best with landscape images.
+        </div>
+    </div>
+</div>
+
+<!-- In-Game UI -->
+<div id="game-ui" class="ui-layer hidden pointer-events-none">
+    <div class="absolute top-4 left-4 interactive">
+        <button class="btn btn-secondary text-sm" onclick="resetGame()">← Back to Menu</button>
+    </div>
+    <div class="absolute bottom-8 text-white/50 text-sm font-mono pointer-events-none w-full text-center">
+        Drag pieces to the wall. They will stick where you place them!
+    </div>
+</div>
+
+<!-- Success UI -->
+<div id="success-ui" class="ui-layer hidden interactive">
+    <div class="glass-panel">
+        <h2 class="text-5xl mb-4">🎉 Amazing!</h2>
+        <p class="text-xl mb-6">Puzzle Solved!</p>
+        <button class="btn" onclick="resetGame()">Play Again</button>
+    </div>
+</div>
+
+<script>
+    // --- Global Variables ---
+    let scene, camera, renderer;
+    let pieces = [];
+    let difficulty = 3;
+    let selectedPiece = null;
+    let raycaster, mouse;
+    let dragPlane;
+    let puzzleTexture = null;
+    let puzzleImageAspectRatio = 1;
+
+    // Puzzle configuration
+    const PUZZLE_WORLD_WIDTH = 14;
+    const PIECE_THICKNESS = 0.5;
+    const SNAP_DISTANCE = 2.5;
+
+    // Environment Config
+    const WALL_Z = -2;
+    const SHELF_Y = -10;
+    const DRAG_Z = WALL_Z + 0.5; // Drag slightly in front of the wall
+
+    // --- Initialization ---
+    function init() {
+        const container = document.getElementById('canvas-container');
+
+        // Scene
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x2c3e50); // Dark Blue-Grey Room
+
+        // Camera (Front View)
+        camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 0, 30); // Look straight at the wall
+        camera.lookAt(0, 0, 0);
+
+        // Renderer
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 20);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        scene.add(dirLight);
+
+        // Wall (The Backdrop)
+        const wallGeo = new THREE.PlaneGeometry(100, 100);
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0x34495e, roughness: 0.9 });
+        const wall = new THREE.Mesh(wallGeo, wallMat);
+        wall.position.z = WALL_Z - 0.5; // Slightly behind target
+        wall.receiveShadow = true;
+        scene.add(wall);
+
+        // Shelf (The Floor at the bottom)
+        const shelfGeo = new THREE.BoxGeometry(60, 5, 10);
+        const shelfMat = new THREE.MeshStandardMaterial({ color: 0x5D4037 }); // Wood
+        const shelf = new THREE.Mesh(shelfGeo, shelfMat);
+        shelf.position.y = SHELF_Y - 2.5; // Top surface is at SHELF_Y
+        shelf.position.z = 2; // Slightly forward
+        shelf.receiveShadow = true;
+        scene.add(shelf);
+
+        // Raycaster & Interaction
+        raycaster = new THREE.Raycaster();
+        mouse = new THREE.Vector2();
+
+        // Drag Plane: Vertical plane at DRAG_Z
+        dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -DRAG_Z);
+
+        // Event Listeners
+        window.addEventListener('resize', onWindowResize, false);
+
+        const canvas = renderer.domElement;
+        canvas.addEventListener('mousedown', onPointerDown);
+        canvas.addEventListener('mousemove', onPointerMove);
+        canvas.addEventListener('mouseup', onPointerUp);
+        canvas.addEventListener('touchstart', onPointerDown, {passive: false});
+        canvas.addEventListener('touchmove', onPointerMove, {passive: false});
+        canvas.addEventListener('touchend', onPointerUp);
+
+        animate();
+    }
+
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    // --- Game Logic ---
+
+    function setDifficulty(n) {
+        difficulty = n;
+        document.getElementById('diff-label').innerText = `Selected: ${n}x${n} (${n === 2 ? 'Easy' : n === 3 ? 'Medium' : 'Hard'})`;
+    }
+
+    function handleImageUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                puzzleImageAspectRatio = img.width / img.height;
+                const loader = new THREE.TextureLoader();
+                puzzleTexture = loader.load(e.target.result, () => {
+                    startGame();
+                });
+                puzzleTexture.colorSpace = THREE.SRGBColorSpace;
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function startGame() {
+        document.getElementById('menu-ui').classList.add('hidden');
+        document.getElementById('game-ui').classList.remove('hidden');
+        document.getElementById('success-ui').classList.add('hidden');
+        generatePuzzle();
+    }
+
+    function resetGame() {
+        pieces.forEach(p => scene.remove(p.mesh));
+        pieces = [];
+        document.getElementById('menu-ui').classList.remove('hidden');
+        document.getElementById('game-ui').classList.add('hidden');
+        document.getElementById('success-ui').classList.add('hidden');
+        document.getElementById('file-input').value = '';
+    }
+
+    function generatePuzzle() {
+        const totalWidth = PUZZLE_WORLD_WIDTH;
+        const totalHeight = totalWidth / puzzleImageAspectRatio;
+
+        const cols = difficulty;
+        const rows = difficulty;
+
+        const pieceWidth = totalWidth / cols;
+        const pieceHeight = totalHeight / rows;
+
+        // Start coordinates for Top-Left of the puzzle on the Wall
+        const startX = -totalWidth / 2 + pieceWidth / 2;
+        const startY = totalHeight / 2 - pieceHeight / 2 + 2; // +2 units up from center
+
+        // 1. Frame on Wall
+        const frameGeo = new THREE.PlaneGeometry(totalWidth + 0.5, totalHeight + 0.5);
+        const frameMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.2 });
+        const frame = new THREE.Mesh(frameGeo, frameMat);
+        frame.position.set(0, 2, WALL_Z);
+        pieces.push({ mesh: frame }); // For cleanup
+        scene.add(frame);
+
+        // 2. Generate Pieces
+        for (let i = 0; i < cols; i++) {
+            for (let j = 0; j < rows; j++) {
+                const pieceGroup = new THREE.Group();
+
+                // Box (Thickness)
+                const boxGeo = new THREE.BoxGeometry(pieceWidth - 0.1, pieceHeight - 0.1, PIECE_THICKNESS);
+                const boxMat = new THREE.MeshStandardMaterial({ color: 0xdddddd });
+                const box = new THREE.Mesh(boxGeo, boxMat);
+                box.castShadow = true;
+                box.receiveShadow = true;
+                pieceGroup.add(box);
+
+                // Image Face
+                const planeGeo = new THREE.PlaneGeometry(pieceWidth - 0.1, pieceHeight - 0.1);
+                const uMin = i / cols;
+                const uMax = (i + 1) / cols;
+                const vMin = 1 - (j + 1) / rows;
+                const vMax = 1 - j / rows;
+
+                const uvs = new Float32Array([
+                    uMin, vMax, // TopLeft
+                    uMax, vMax, // TopRight
+                    uMin, vMin, // BotLeft
+                    uMax, vMin  // BotRight
+                ]);
+                planeGeo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+                const planeMat = new THREE.MeshBasicMaterial({ map: puzzleTexture });
+                const plane = new THREE.Mesh(planeGeo, planeMat);
+                plane.position.z = PIECE_THICKNESS / 2 + 0.01; // Front
+                pieceGroup.add(plane);
+
+                // Target Position (On Wall)
+                const targetX = startX + i * pieceWidth;
+                const targetY = startY - j * pieceHeight;
+
+                pieceGroup.userData = {
+                    isPiece: true,
+                    targetPos: new THREE.Vector3(targetX, targetY, WALL_Z),
+                    isLocked: false,
+                    originalShelfX: (Math.random() - 0.5) * 25
+                };
+
+                // Initial Position (On Shelf)
+                const initialX = (Math.random() - 0.5) * 20;
+                const initialY = SHELF_Y + (Math.random() * 2);
+                const initialZ = (Math.random() * 3);
+
+                pieceGroup.position.set(initialX, initialY, initialZ);
+                pieceGroup.rotation.z = (Math.random() - 0.5) * 0.5;
+                pieceGroup.rotation.x = -0.2;
+
+                scene.add(pieceGroup);
+                pieces.push({ mesh: pieceGroup, ...pieceGroup.userData });
+            }
+        }
+    }
+
+    // --- Interaction Handlers ---
+
+    function onPointerDown(event) {
+        event.preventDefault();
+
+        let clientX, clientY;
+        if (event.changedTouches) {
+            clientX = event.changedTouches[0].clientX;
+            clientY = event.changedTouches[0].clientY;
+        } else {
+            clientX = event.clientX;
+            clientY = event.clientY;
+        }
+
+        mouse.x = (clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+
+        const candidates = pieces.map(p => p.mesh).filter(m => m.visible && !m.userData.isLocked && m.userData.isPiece);
+        const intersects = raycaster.intersectObjects(candidates, true);
+
+        if (intersects.length > 0) {
+            let obj = intersects[0].object;
+            while(obj.parent && !obj.userData.isPiece) {
+                obj = obj.parent;
+            }
+
+            if (obj.userData.isLocked) return;
+
+            selectedPiece = obj;
+
+            // Lift piece to DRAG_Z
+            new TWEEN(selectedPiece.position).to({ z: DRAG_Z }, 150).start();
+            new TWEEN(selectedPiece.rotation).to({ x: 0, z: 0 }, 150).start();
+        }
+    }
+
+    function onPointerMove(event) {
+        if (!selectedPiece) return;
+        event.preventDefault();
+
+        let clientX, clientY;
+        if (event.changedTouches) {
+            clientX = event.changedTouches[0].clientX;
+            clientY = event.changedTouches[0].clientY;
+        } else {
+            clientX = event.clientX;
+            clientY = event.clientY;
+        }
+
+        mouse.x = (clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+
+        const intersectPoint = new THREE.Vector3();
+        // Drag on vertical plane
+        if (raycaster.ray.intersectPlane(dragPlane, intersectPoint)) {
+            selectedPiece.position.x = intersectPoint.x;
+            selectedPiece.position.y = intersectPoint.y;
+            // Z stays at plane depth
+        }
+    }
+
+    function onPointerUp(event) {
+        if (!selectedPiece) return;
+
+        // Check distance to target
+        const currentPos = new THREE.Vector2(selectedPiece.position.x, selectedPiece.position.y);
+        const targetPos = new THREE.Vector2(selectedPiece.userData.targetPos.x, selectedPiece.userData.targetPos.y);
+        const dist = currentPos.distanceTo(targetPos);
+
+        if (dist < SNAP_DISTANCE) {
+            // Snap (Win Condition)!
+            selectedPiece.userData.isLocked = true;
+
+            new TWEEN(selectedPiece.position).to({
+                x: selectedPiece.userData.targetPos.x,
+                y: selectedPiece.userData.targetPos.y,
+                z: selectedPiece.userData.targetPos.z
+            }, 200).easing(easingOutBack).start();
+
+            new TWEEN(selectedPiece.rotation).to({ x: 0, y: 0, z: 0 }, 200).start();
+
+            checkWinCondition();
+        } else {
+            // Sticky Wall Logic
+            // If above the shelf area, stick to the wall
+            if (selectedPiece.position.y > SHELF_Y + 5) {
+                // Move flush to wall (preserving X, Y)
+                // Add tiny random Z to avoid z-fighting if multiple pieces are stacked
+                const stickZ = WALL_Z + Math.random() * 0.2;
+
+                new TWEEN(selectedPiece.position).to({
+                    z: stickZ
+                }, 200).easing(easingOutBack).start();
+
+                // Flatten against wall
+                new TWEEN(selectedPiece.rotation).to({ x: 0, z: 0 }, 200).start();
+            } else {
+                // Drop back to Shelf (Only if very low)
+                const dropX = Math.max(-12, Math.min(12, selectedPiece.position.x));
+
+                new TWEEN(selectedPiece.position).to({
+                    x: dropX,
+                    y: SHELF_Y + Math.random(),
+                    z: Math.random() * 2
+                }, 500).easing(easingOutBounce).start();
+
+                new TWEEN(selectedPiece.rotation).to({ x: -0.2, z: (Math.random()-0.5)*0.5 }, 500).start();
+            }
+        }
+
+        selectedPiece = null;
+    }
+
+    function checkWinCondition() {
+        const actualPieces = pieces.filter(p => p.mesh.userData && p.mesh.userData.isPiece);
+        const allLocked = actualPieces.every(p => p.mesh.userData.isLocked);
+
+        if (allLocked && actualPieces.length > 0) {
+            setTimeout(() => {
+                celebrate();
+                document.getElementById('success-ui').classList.remove('hidden');
+            }, 500);
+        }
+    }
+
+    function celebrate() {
+        for(let i=0; i<50; i++) {
+            const conf = document.createElement('div');
+            conf.className = 'confetti';
+            conf.style.left = Math.random() * 100 + 'vw';
+            conf.style.backgroundColor = `hsl(${Math.random() * 360}, 100%, 50%)`;
+            conf.style.animationDuration = (Math.random() * 2 + 2) + 's';
+            document.body.appendChild(conf);
+            setTimeout(() => conf.remove(), 4000);
+        }
+    }
+
+    // --- Tween Engine ---
+    const activeTweens = [];
+    function TWEEN(target) {
+        this.target = target;
+        this.toValues = {};
+        this.duration = 1000;
+        this.startTime = 0;
+        this.easingFn = (t) => t;
+
+        this.to = function(values, duration) {
+            this.toValues = values;
+            this.duration = duration;
+            this.startValues = {};
+            for(let k in values) this.startValues[k] = this.target[k];
+            return this;
+        };
+        this.easing = function(fn) {
+            this.easingFn = fn;
+            return this;
+        };
+        this.start = function() {
+            this.startTime = performance.now();
+            activeTweens.push(this);
+        };
+        this.update = function(time) {
+            const elapsed = time - this.startTime;
+            const progress = Math.min(elapsed / this.duration, 1);
+            const eased = this.easingFn(progress);
+            for(let k in this.toValues) {
+                this.target[k] = this.startValues[k] + (this.toValues[k] - this.startValues[k]) * eased;
+            }
+            return progress < 1;
+        };
+    }
+
+    const easingOutBack = (t) => {
+        const c1 = 1.70158;
+        const c3 = c1 + 1;
+        return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+    };
+
+    const easingOutBounce = (x) => {
+        const n1 = 7.5625;
+        const d1 = 2.75;
+        if (x < 1 / d1) return n1 * x * x;
+        else if (x < 2 / d1) return n1 * (x -= 1.5 / d1) * x + 0.75;
+        else if (x < 2.5 / d1) return n1 * (x -= 2.25 / d1) * x + 0.9375;
+        else return n1 * (x -= 2.625 / d1) * x + 0.984375;
+    };
+
+    function animate(time) {
+        requestAnimationFrame(animate);
+        for (let i = activeTweens.length - 1; i >= 0; i--) {
+            if (!activeTweens[i].update(time)) {
+                activeTweens.splice(i, 1);
+            }
+        }
+        renderer.render(scene, camera);
+    }
+
+    init();
+</script>
+</body>
+</html>
