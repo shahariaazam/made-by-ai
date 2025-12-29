@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Safwan's Watch</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&family=Roboto+Mono:wght@500&display=swap');
+
+        body {
+            font-family: 'Fredoka', sans-serif;
+            background-color: #f0f9ff;
+            touch-action: none; /* Prevent scrolling while dragging hands */
+            overflow: hidden; /* Lock viewport for game feel */
+        }
+
+        /* Realistic Watch Styles */
+        .watch-rim {
+            background: linear-gradient(135deg, #e2e8f0 0%, #94a3b8 50%, #475569 100%);
+            box-shadow:
+                    20px 20px 60px #bebebe,
+                    -20px -20px 60px #ffffff,
+                    inset 5px 5px 15px rgba(0,0,0,0.1);
+            border-radius: 50%;
+            position: relative;
+        }
+
+        .watch-face {
+            background: radial-gradient(circle at 30% 30%, #ffffff, #f1f5f9);
+            border-radius: 50%;
+            box-shadow: inset 2px 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .number {
+            position: absolute;
+            text-align: center;
+            font-weight: 600;
+            color: #1e293b;
+            transform: translate(-50%, -50%);
+        }
+
+        /* Hands */
+        .hand-container {
+            position: absolute;
+            bottom: 50%; /* Sits in the top half (12 o'clock position relative to center) */
+            left: 50%;
+            width: 40px; /* Fixed width to prevent collapsing */
+            margin-left: -20px; /* Center the container horizontally over the pivot */
+            transform-origin: center bottom; /* Pivot at the exact center of the clock */
+            cursor: grab;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end; /* Align hands to the bottom (center of clock) */
+            z-index: 10;
+        }
+
+        .hand-container:active {
+            cursor: grabbing;
+        }
+
+        /* Hit boxes (invisible wider areas for easier grabbing) */
+        .hitbox {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            background: transparent;
+            z-index: 20;
+        }
+
+        .hour-hand {
+            width: 8px;
+            /* height is handled by utility classes or inline styles */
+            background: #1e293b;
+            border-radius: 4px;
+            position: relative;
+            z-index: 2;
+            flex-shrink: 0; /* Prevent shrinking */
+        }
+        /* Hitbox for hour */
+        .hour-hitbox { width: 40px; height: 90px; }
+
+        .minute-hand {
+            width: 6px;
+            background: #3b82f6;
+            border-radius: 3px;
+            position: relative;
+            z-index: 3;
+            flex-shrink: 0;
+        }
+        /* Hitbox for minute */
+        .minute-hitbox { width: 40px; height: 120px; }
+
+        .second-hand {
+            width: 2px;
+            background: #ef4444;
+            position: relative;
+            z-index: 4;
+            flex-shrink: 0;
+        }
+        /* Hitbox for second */
+        .second-hitbox { width: 40px; height: 130px; }
+
+        .center-pin {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 16px;
+            height: 16px;
+            background: #cbd5e1;
+            border: 2px solid #ef4444;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 50; /* Ensure pin is on top of hands */
+            pointer-events: none;
+        }
+
+        /* Digital Display */
+        .digital-display {
+            font-family: 'Roboto Mono', monospace;
+            box-shadow: inset 2px 2px 5px rgba(0,0,0,0.1), inset -2px -2px 5px rgba(255,255,255,1);
+        }
+
+        .glass-overlay {
+            pointer-events: none;
+            background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 50%, rgba(255,255,255,0.1) 100%);
+            border-radius: 50%;
+        }
+
+        /* Ghost Hands for corrections */
+        .ghost-hand {
+            opacity: 0.3;
+            pointer-events: none;
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col items-center justify-center relative">
+
+<!-- Header -->
+<div class="absolute top-4 w-full text-center z-30 px-4">
+    <h1 class="text-3xl md:text-5xl font-bold text-blue-600 drop-shadow-sm">Safwan's Watch</h1>
+    <p class="text-gray-500 mt-1 text-sm md:text-base">Match the hands to the time below!</p>
+</div>
+
+<!-- Game Area -->
+<div class="flex flex-col items-center gap-6 mt-12 md:mt-0">
+
+    <!-- Target Time Board -->
+    <div class="bg-blue-100 rounded-2xl p-4 md:p-6 shadow-lg border-4 border-white text-center transform hover:scale-105 transition-transform duration-300">
+        <p class="text-gray-500 text-xs md:text-sm uppercase font-bold tracking-wider mb-1">Make this time</p>
+        <div id="targetTimeDisplay" class="digital-display bg-blue-900 text-green-400 text-4xl md:text-6xl px-6 py-2 rounded-lg tracking-widest border border-blue-800">
+            10:10:30
+        </div>
+        <p class="text-blue-800 text-xs mt-1 opacity-70">(Seconds are optional)</p>
+    </div>
+
+    <!-- The Clock -->
+    <div class="relative">
+        <!-- Ghost Container (Shows Correct Answer on fail) -->
+        <div id="clockContainer" class="watch-rim w-72 h-72 md:w-96 md:h-96 flex items-center justify-center relative select-none">
+
+            <!-- Inner Face -->
+            <div class="watch-face w-[90%] h-[90%] relative">
+
+                <!-- Numbers (Generated by JS) -->
+                <div id="numbersContainer" class="w-full h-full absolute top-0 left-0"></div>
+
+                <!-- Ticks -->
+                <div id="ticksContainer" class="w-full h-full absolute top-0 left-0 pointer-events-none"></div>
+
+                <!-- Ghost Hands (Hidden by default) -->
+                <div id="ghostHour" class="hand-container ghost-hand" style="height: 50%; transform: rotate(0deg);">
+                    <div class="hour-hand bg-green-500" style="height: 55%;"></div>
+                </div>
+                <div id="ghostMinute" class="hand-container ghost-hand" style="height: 50%; transform: rotate(0deg);">
+                    <div class="minute-hand bg-green-500" style="height: 80%;"></div>
+                </div>
+                <div id="ghostSecond" class="hand-container ghost-hand" style="height: 50%; transform: rotate(0deg);">
+                    <div class="second-hand bg-green-500" style="height: 85%;"></div>
+                </div>
+
+                <!-- Active Hands -->
+                <div id="hourHandContainer" class="hand-container z-20" style="height: 50%; transform: rotate(0deg);">
+                    <div class="hour-hitbox hitbox"></div>
+                    <div class="hour-hand h-[50%] md:h-[55%]"></div>
+                </div>
+
+                <div id="minuteHandContainer" class="hand-container z-30" style="height: 50%; transform: rotate(0deg);">
+                    <div class="minute-hitbox hitbox"></div>
+                    <div class="minute-hand h-[70%] md:h-[80%]"></div>
+                </div>
+
+                <div id="secondHandContainer" class="hand-container z-40" style="height: 50%; transform: rotate(0deg);">
+                    <div class="second-hitbox hitbox"></div>
+                    <div class="second-hand h-[80%] md:h-[85%]"></div>
+                </div>
+
+                <!-- Center Pin -->
+                <div class="center-pin"></div>
+
+                <!-- Glass Shine -->
+                <div class="glass-overlay absolute inset-0 z-50"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feedback & Controls -->
+    <div class="flex flex-col items-center gap-3 w-full max-w-sm px-4">
+        <div id="messageBox" class="h-8 text-center font-bold text-xl text-orange-500 transition-all duration-300">
+            <!-- Messages go here -->
+        </div>
+
+        <div class="flex gap-4 w-full">
+            <button onclick="checkAnswer()" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg transform active:scale-95 transition-all text-lg flex items-center justify-center gap-2">
+                <span>✨ Check</span>
+            </button>
+            <button onclick="showAnswer()" id="btnShowAnswer" class="hidden flex-1 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-bold py-3 px-6 rounded-xl shadow-lg transform active:scale-95 transition-all text-lg">
+                👀 Show Me
+            </button>
+            <button onclick="initGame()" id="btnNext" class="hidden flex-1 bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg transform active:scale-95 transition-all text-lg">
+                Next ➡
+            </button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // --- Game State ---
+    let targetHour, targetMinute, targetSecond;
+    let currentHourAngle = 0;
+    let currentMinuteAngle = 0;
+    let currentSecondAngle = 0;
+    let baseHourAngle = 0; // Represents the "Hour" integer position (0, 30, 60...)
+    let activeHand = null;
+    let isDragging = false;
+
+    // DOM Elements
+    const hourHand = document.getElementById('hourHandContainer');
+    const minuteHand = document.getElementById('minuteHandContainer');
+    const secondHand = document.getElementById('secondHandContainer');
+    const clockContainer = document.getElementById('clockContainer');
+    const messageBox = document.getElementById('messageBox');
+
+    // --- Initialization ---
+
+    function createClockFace() {
+        const numbersContainer = document.getElementById('numbersContainer');
+        const ticksContainer = document.getElementById('ticksContainer');
+        const radius = 42; // percentage
+
+        // Numbers
+        for (let i = 1; i <= 12; i++) {
+            const angle = i * 30 * (Math.PI / 180);
+            const x = 50 + radius * Math.sin(angle);
+            const y = 50 - radius * Math.cos(angle);
+
+            const numDiv = document.createElement('div');
+            numDiv.className = 'number text-xl md:text-2xl';
+            numDiv.innerText = i;
+            numDiv.style.left = `${x}%`;
+            numDiv.style.top = `${y}%`;
+            numbersContainer.appendChild(numDiv);
+        }
+
+        // Ticks
+        for (let i = 0; i < 60; i++) {
+            const tick = document.createElement('div');
+            const angle = i * 6;
+            const isHour = i % 5 === 0;
+
+            // Create a wrapper for rotation
+            const wrapper = document.createElement('div');
+            wrapper.style.position = 'absolute';
+            wrapper.style.width = '100%';
+            wrapper.style.height = '100%';
+            wrapper.style.left = '0';
+            wrapper.style.top = '0';
+            wrapper.style.transform = `rotate(${angle}deg)`;
+
+            const line = document.createElement('div');
+            line.style.width = isHour ? '4px' : '2px';
+            line.style.height = isHour ? '12px' : '6px';
+            line.style.background = isHour ? '#475569' : '#94a3b8';
+            line.style.margin = '4px auto 0'; // Stick to top inside
+            line.style.borderRadius = '2px';
+
+            wrapper.appendChild(line);
+            ticksContainer.appendChild(wrapper);
+        }
+    }
+
+    function initGame() {
+        // Generate Random Time
+        targetHour = Math.floor(Math.random() * 12) + 1; // 1-12
+        targetMinute = Math.floor(Math.random() * 12) * 5; // 0, 5, 10... 55 (Easier for 6yo)
+        // Occasionally give a hard minute (e.g. 13)
+        if(Math.random() > 0.7) targetMinute = Math.floor(Math.random() * 60);
+
+        targetSecond = Math.floor(Math.random() * 4) * 15; // 0, 15, 30, 45 (Easier)
+        if(Math.random() > 0.7) targetSecond = Math.floor(Math.random() * 60);
+
+        // Format Display
+        const hDisplay = targetHour < 10 ? '0' + targetHour : targetHour;
+        const mDisplay = targetMinute < 10 ? '0' + targetMinute : targetMinute;
+        const sDisplay = targetSecond < 10 ? '0' + targetSecond : targetSecond;
+
+        document.getElementById('targetTimeDisplay').innerText = `${hDisplay}:${mDisplay}:${sDisplay}`;
+
+        // Reset Hands
+        currentMinuteAngle = Math.random() * 360;
+        currentSecondAngle = Math.random() * 360;
+        baseHourAngle = Math.random() * 360;
+
+        // Calculate initial hour position based on base + minute offset
+        currentHourAngle = baseHourAngle + (currentMinuteAngle / 12);
+
+        updateHands();
+
+        // Reset UI
+        messageBox.innerText = "";
+        document.getElementById('btnShowAnswer').classList.add('hidden');
+        document.getElementById('btnNext').classList.add('hidden');
+        document.querySelector('.watch-rim').classList.remove('ring-4', 'ring-green-400', 'ring-red-400');
+
+        // Hide Ghost Hands
+        document.querySelectorAll('.ghost-hand').forEach(el => el.style.opacity = '0');
+    }
+
+    function updateHands() {
+        // Normalize angles 0-360 for display
+        hourHand.style.transform = `rotate(${currentHourAngle}deg)`;
+        minuteHand.style.transform = `rotate(${currentMinuteAngle}deg)`;
+        secondHand.style.transform = `rotate(${currentSecondAngle}deg)`;
+    }
+
+    // --- Interaction Logic ---
+
+    function getAngle(x, y) {
+        const rect = clockContainer.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+
+        // Atan2 returns angle in radians from -PI to PI
+        // 0 is 3 o'clock, we need 0 at 12 o'clock.
+        let rad = Math.atan2(y - centerY, x - centerX);
+        let deg = rad * (180 / Math.PI);
+
+        // Convert standard math degree (0 at 3pm, CCW positive)
+        // to Clock degree (0 at 12pm, CW positive)
+        deg = deg + 90;
+
+        if (deg < 0) deg += 360;
+        return deg;
+    }
+
+    function startDrag(e, handType) {
+        e.preventDefault();
+        isDragging = true;
+        activeHand = handType;
+
+        // Add grabbing cursor class
+        document.body.style.cursor = 'grabbing';
+    }
+
+    function handleMove(e) {
+        if (!isDragging || !activeHand) return;
+        e.preventDefault();
+
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+        let angle = getAngle(clientX, clientY);
+
+        // Snap logic
+        if (activeHand === 'minute' || activeHand === 'second') {
+            angle = Math.round(angle / 6) * 6;
+        }
+
+        if (activeHand === 'hour') {
+            currentHourAngle = angle;
+            // Reverse calculate base so if we touch minute next, it doesn't jump
+            // We preserve the current visual position, but update the "Base"
+            baseHourAngle = (currentHourAngle - (currentMinuteAngle / 12) + 360) % 360;
+            hourHand.style.transform = `rotate(${currentHourAngle}deg)`;
+        } else if (activeHand === 'minute') {
+            currentMinuteAngle = angle;
+            // Move hour hand proportionally
+            currentHourAngle = baseHourAngle + (currentMinuteAngle / 12);
+
+            minuteHand.style.transform = `rotate(${currentMinuteAngle}deg)`;
+            hourHand.style.transform = `rotate(${currentHourAngle}deg)`;
+        } else if (activeHand === 'second') {
+            currentSecondAngle = angle;
+            secondHand.style.transform = `rotate(${angle}deg)`;
+        }
+    }
+
+    function stopDrag() {
+        isDragging = false;
+        activeHand = null;
+        document.body.style.cursor = 'default';
+    }
+
+    // Event Listeners for Dragging
+    // Hour
+    hourHand.addEventListener('mousedown', (e) => startDrag(e, 'hour'));
+    hourHand.addEventListener('touchstart', (e) => startDrag(e, 'hour'));
+
+    // Minute
+    minuteHand.addEventListener('mousedown', (e) => startDrag(e, 'minute'));
+    minuteHand.addEventListener('touchstart', (e) => startDrag(e, 'minute'));
+
+    // Second
+    secondHand.addEventListener('mousedown', (e) => startDrag(e, 'second'));
+    secondHand.addEventListener('touchstart', (e) => startDrag(e, 'second'));
+
+    // Global Move/Up
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('touchmove', handleMove, { passive: false });
+    window.addEventListener('mouseup', stopDrag);
+    window.addEventListener('touchend', stopDrag);
+
+
+    // --- Check Logic ---
+
+    function checkAnswer() {
+        // Calculate Target Angles
+        const correctSecondAngle = targetSecond * 6;
+        const correctMinuteAngle = targetMinute * 6;
+        const correctHourAngle = (targetHour % 12) * 30 + (targetMinute * 0.5);
+
+        // Normalize current angles (0-360)
+        const curH = currentHourAngle % 360;
+        const curM = currentMinuteAngle % 360;
+        const curS = currentSecondAngle % 360;
+
+        // Tolerance (Degrees)
+        const tolerance = 12; // +/- 2 minutes roughly
+        const hourTolerance = 20; // Increased tolerance for hour hand since it moves automatically
+
+        // Logic to calculate difference considering 359 vs 1 degree
+        const diff = (a, b) => {
+            let d = Math.abs(a - b) % 360;
+            return d > 180 ? 360 - d : d;
+        };
+
+        const hDiff = diff(curH, correctHourAngle);
+        const mDiff = diff(curM, correctMinuteAngle);
+
+        // Check (Seconds are optional now)
+        const isHourGood = hDiff <= hourTolerance;
+        const isMinuteGood = mDiff <= tolerance;
+
+        if (isHourGood && isMinuteGood) {
+            // WIN
+            messageBox.innerHTML = "🎉 Incredible Job, Safwan! 🎉";
+            messageBox.style.color = "#16a34a"; // Green
+            document.querySelector('.watch-rim').classList.add('ring-4', 'ring-green-400');
+
+            // Confetti
+            confetti({
+                particleCount: 150,
+                spread: 70,
+                origin: { y: 0.6 }
+            });
+
+            document.getElementById('btnNext').classList.remove('hidden');
+            document.getElementById('btnShowAnswer').classList.add('hidden');
+        } else {
+            // FAIL
+            messageBox.innerHTML = "Almost there! Try again? 🤔";
+            messageBox.style.color = "#ea580c"; // Orange
+            document.querySelector('.watch-rim').classList.add('ring-4', 'ring-red-400');
+            setTimeout(() => document.querySelector('.watch-rim').classList.remove('ring-4', 'ring-red-400'), 1000);
+
+            document.getElementById('btnShowAnswer').classList.remove('hidden');
+        }
+    }
+
+    function showAnswer() {
+        const correctSecondAngle = targetSecond * 6;
+        const correctMinuteAngle = targetMinute * 6;
+        const correctHourAngle = (targetHour % 12) * 30 + (targetMinute * 0.5);
+
+        const gh = document.getElementById('ghostHour');
+        const gm = document.getElementById('ghostMinute');
+        const gs = document.getElementById('ghostSecond');
+
+        gh.style.transform = `rotate(${correctHourAngle}deg)`;
+        gm.style.transform = `rotate(${correctMinuteAngle}deg)`;
+        gs.style.transform = `rotate(${correctSecondAngle}deg)`;
+
+        // Show them
+        gh.style.opacity = '0.4';
+        gm.style.opacity = '0.4';
+        gs.style.opacity = '0.4';
+
+        messageBox.innerText = "Match the green ghost hands!";
+        document.getElementById('btnShowAnswer').classList.add('hidden');
+    }
+
+    // Init
+    createClockFace();
+    initGame();
+
+</script>
+</body>
+</html>
