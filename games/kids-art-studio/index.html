@@ -34,7 +34,7 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            padding: 20px;
+            padding: 15px;
             box-sizing: border-box;
         }
 
@@ -49,10 +49,13 @@
             pointer-events: auto;
         }
 
-        .top-bar {
+        /* Header Layout */
+        .header-row {
             display: flex;
             justify-content: space-between;
-            align-items: flex-start;
+            align-items: center;
+            width: 100%;
+            pointer-events: none; /* Allow clicks through empty space */
         }
 
         .title-badge {
@@ -66,15 +69,45 @@
             text-transform: uppercase;
             letter-spacing: 1px;
             transform: rotate(-2deg);
+            pointer-events: auto;
         }
 
+        /* Toggle Button */
+        #toggle-tools {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 4px solid #fff;
+            background: #FF6B6B;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            pointer-events: auto;
+            box-shadow: 0 5px 10px rgba(0,0,0,0.2);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.2s;
+            z-index: 20;
+        }
+        #toggle-tools:active { transform: scale(0.9); }
+
         .tools-panel {
+            position: absolute;
+            right: 15px;
+            top: 80px; /* Below the header */
             padding: 15px;
             display: flex;
             flex-direction: column;
             gap: 15px;
             align-items: center;
-            width: 80px;
+            width: 70px;
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform: translateX(0);
+        }
+
+        .tools-panel.closed {
+            transform: translateX(200%); /* Slide off screen */
         }
 
         .tool-btn {
@@ -135,6 +168,8 @@
             pointer-events: none;
             opacity: 0.8;
             text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            width: 80%;
+            text-align: center;
         }
 
         #loading {
@@ -175,8 +210,37 @@
             border: 4px solid #6BCB77;
             text-align: center;
             transform: translate(-50%, -50%) scale(0.8);
+            width: 80%;
+            max-width: 300px;
         }
         #toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+        /* Responsive Mobile Styles */
+        @media (max-width: 600px) {
+            .title-badge {
+                font-size: 18px;
+                padding: 8px 15px;
+            }
+            .tool-btn {
+                width: 50px;
+                height: 50px;
+                font-size: 24px;
+            }
+            .tools-panel {
+                width: 60px;
+                top: 70px;
+                right: 10px;
+                padding: 10px;
+            }
+            input[type=range] {
+                height: 80px;
+            }
+            #toggle-tools {
+                width: 45px;
+                height: 45px;
+                font-size: 20px;
+            }
+        }
 
     </style>
 </head>
@@ -193,21 +257,22 @@
 </div>
 
 <div id="ui-layer">
-    <div class="top-bar">
+    <div class="header-row">
         <div class="title-badge">🎨 Kids Studio</div>
+        <button id="toggle-tools" title="Show/Hide Tools">⚙️</button>
+    </div>
 
-        <div class="wood-panel tools-panel">
-            <button class="tool-btn active-tool" id="brush-btn" title="Brush">🖌️</button>
-            <button class="tool-btn" id="eraser-btn" title="Eraser">🧼</button>
+    <div class="wood-panel tools-panel" id="main-tools">
+        <button class="tool-btn active-tool" id="brush-btn" title="Brush">🖌️</button>
+        <button class="tool-btn" id="eraser-btn" title="Eraser">🧼</button>
 
-            <div class="size-control">
-                <input type="range" id="brush-size" min="2" max="50" value="10" title="Size">
-            </div>
-
-            <button class="tool-btn" id="undo-btn" title="Undo" disabled>↩️</button>
-            <button class="tool-btn delete" id="clear-btn" title="Clear Canvas">🗑️</button>
-            <button class="tool-btn save" id="save-btn" title="Save Art">📸</button>
+        <div class="size-control">
+            <input type="range" id="brush-size" min="2" max="50" value="10" title="Size">
         </div>
+
+        <button class="tool-btn" id="undo-btn" title="Undo" disabled>↩️</button>
+        <button class="tool-btn delete" id="clear-btn" title="Clear Canvas">🗑️</button>
+        <button class="tool-btn save" id="save-btn" title="Save Art">📸</button>
     </div>
 
     <div class="instruction">
@@ -718,6 +783,12 @@
     document.getElementById('eraser-btn').onclick = () => setTool('eraser');
     document.getElementById('undo-btn').onclick = undo;
     document.getElementById('brush-size').oninput = (e) => state.size = parseInt(e.target.value);
+
+    // Toggle Tools
+    document.getElementById('toggle-tools').onclick = () => {
+        const panel = document.getElementById('main-tools');
+        panel.classList.toggle('closed');
+    };
 
     document.getElementById('save-btn').onclick = () => {
         spawnConfetti();
