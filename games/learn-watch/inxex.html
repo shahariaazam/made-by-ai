@@ -154,6 +154,7 @@
         <div id="targetTimeDisplay" class="digital-display bg-blue-900 text-green-400 text-4xl md:text-6xl px-6 py-2 rounded-lg tracking-widest border border-blue-800">
             10:10:30
         </div>
+        <p class="text-blue-800 text-xs mt-1 opacity-70">(Seconds are optional)</p>
     </div>
 
     <!-- The Clock -->
@@ -233,6 +234,7 @@
     let currentHourAngle = 0;
     let currentMinuteAngle = 0;
     let currentSecondAngle = 0;
+    let baseHourAngle = 0; // Represents the "Hour" integer position (0, 30, 60...)
     let activeHand = null;
     let isDragging = false;
 
@@ -308,10 +310,14 @@
 
         document.getElementById('targetTimeDisplay').innerText = `${hDisplay}:${mDisplay}:${sDisplay}`;
 
-        // Reset Hands Randomly (so they have to move them)
-        currentHourAngle = Math.random() * 360;
+        // Reset Hands
         currentMinuteAngle = Math.random() * 360;
         currentSecondAngle = Math.random() * 360;
+        baseHourAngle = Math.random() * 360;
+
+        // Calculate initial hour position based on base + minute offset
+        currentHourAngle = baseHourAngle + (currentMinuteAngle / 12);
+
         updateHands();
 
         // Reset UI
@@ -369,19 +375,24 @@
 
         let angle = getAngle(clientX, clientY);
 
-        // Snap logic (Optional: makes it easier to hit exact numbers)
-        // Snap Minutes/Seconds to 6 degrees (1 tick)
+        // Snap logic
         if (activeHand === 'minute' || activeHand === 'second') {
             angle = Math.round(angle / 6) * 6;
         }
-        // Snap Hour to easier increments? Maybe not, allow free flow
 
         if (activeHand === 'hour') {
             currentHourAngle = angle;
-            hourHand.style.transform = `rotate(${angle}deg)`;
+            // Reverse calculate base so if we touch minute next, it doesn't jump
+            // We preserve the current visual position, but update the "Base"
+            baseHourAngle = (currentHourAngle - (currentMinuteAngle / 12) + 360) % 360;
+            hourHand.style.transform = `rotate(${currentHourAngle}deg)`;
         } else if (activeHand === 'minute') {
             currentMinuteAngle = angle;
-            minuteHand.style.transform = `rotate(${angle}deg)`;
+            // Move hour hand proportionally
+            currentHourAngle = baseHourAngle + (currentMinuteAngle / 12);
+
+            minuteHand.style.transform = `rotate(${currentMinuteAngle}deg)`;
+            hourHand.style.transform = `rotate(${currentHourAngle}deg)`;
         } else if (activeHand === 'second') {
             currentSecondAngle = angle;
             secondHand.style.transform = `rotate(${angle}deg)`;
@@ -418,14 +429,8 @@
 
     function checkAnswer() {
         // Calculate Target Angles
-        // Hour: (Hour % 12) * 30 + (Minute * 0.5)
-        // Note: In simple kids games, sometimes they expect the hour hand to point directly at the number even if it's 30 mins past.
-        // But "Realistic" means we should account for the drift.
-        // However, to make it easier for a 6yo, let's allow a range.
-
-        // Calculate where the hands SHOULD be
         const correctSecondAngle = targetSecond * 6;
-        const correctMinuteAngle = targetMinute * 6; // We ignore second drift for minute hand difficulty
+        const correctMinuteAngle = targetMinute * 6;
         const correctHourAngle = (targetHour % 12) * 30 + (targetMinute * 0.5);
 
         // Normalize current angles (0-360)
@@ -435,7 +440,7 @@
 
         // Tolerance (Degrees)
         const tolerance = 12; // +/- 2 minutes roughly
-        const hourTolerance = 15; // Generous for hour hand
+        const hourTolerance = 20; // Increased tolerance for hour hand since it moves automatically
 
         // Logic to calculate difference considering 359 vs 1 degree
         const diff = (a, b) => {
@@ -445,14 +450,12 @@
 
         const hDiff = diff(curH, correctHourAngle);
         const mDiff = diff(curM, correctMinuteAngle);
-        const sDiff = diff(curS, correctSecondAngle);
 
-        // Check
+        // Check (Seconds are optional now)
         const isHourGood = hDiff <= hourTolerance;
         const isMinuteGood = mDiff <= tolerance;
-        const isSecondGood = sDiff <= tolerance;
 
-        if (isHourGood && isMinuteGood && isSecondGood) {
+        if (isHourGood && isMinuteGood) {
             // WIN
             messageBox.innerHTML = "🎉 Incredible Job, Safwan! 🎉";
             messageBox.style.color = "#16a34a"; // Green
@@ -469,7 +472,7 @@
             document.getElementById('btnShowAnswer').classList.add('hidden');
         } else {
             // FAIL
-            messageBox.innerHTML = "Almost there! Try again or peek? 🤔";
+            messageBox.innerHTML = "Almost there! Try again? 🤔";
             messageBox.style.color = "#ea580c"; // Orange
             document.querySelector('.watch-rim').classList.add('ring-4', 'ring-red-400');
             setTimeout(() => document.querySelector('.watch-rim').classList.remove('ring-4', 'ring-red-400'), 1000);
